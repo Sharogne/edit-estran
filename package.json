@@ -2,9 +2,13 @@
   "name": "edit",
   "version": "0.1.0",
   "private": true,
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postinstall": "prisma generate && node scripts/fix-sharp-wasm.cjs",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
@@ -25,6 +29,7 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
     "iron-session": "^8.0.4",
     "next": "16.2.9",
     "next-intl": "^4.13.0",
