@@ -1,17 +1,17 @@
 import { Fraunces, Inter } from "next/font/google";
 
 // Editorial pairing: expressive serif for display/headings, neutral sans for text/UI.
-// Exposed as CSS variables consumed by the design tokens in globals.css (@theme).
-// Shared by every root layout (public site + admin) so typography stays consistent.
+// These inject raw CSS variables consumed by the @theme tokens in globals.css
+// (--font-display / --font-sans). Shared by every root layout (public + admin).
 
 export const fontDisplay = Fraunces({
-  variable: "--font-display",
+  variable: "--font-fraunces",
   subsets: ["latin"],
   axes: ["opsz"],
 });
 
 export const fontSans = Inter({
-  variable: "--font-sans",
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 

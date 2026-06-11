@@ -1,9 +1,47 @@
 {
+  "site": {
+    "tagline": "Des livres faits avec soin",
+    "description": "Maison d'édition indépendante. Nous publions peu, lentement : récits, romans et formes brèves choisis pour durer."
+  },
   "nav": {
     "home": "Accueil",
     "projects": "Projets"
   },
+  "localeSwitcher": {
+    "label": "Langue",
+    "fr": "Français",
+    "en": "English"
+  },
   "home": {
-    "title": "Maison d'édition"
+    "heroTitle": "Des livres faits avec soin",
+    "heroText": "Maison d'édition indépendante, nous publions peu, lentement — des récits, des romans, des formes brèves. Des textes qui nous tiennent, fabriqués pour durer.",
+    "heroCta": "Découvrir nos projets",
+    "aboutTitle": "La maison",
+    "aboutP1": "Fondée sur une conviction simple — un livre est un objet de temps long —, la maison défend des écritures singulières et des fabrications soignées : papier choisi, typographie dessinée, façonnage à l'ancienne.",
+    "aboutP2": "Chaque projet est mené comme un compagnonnage avec son auteur, du manuscrit à la librairie. Nous préférons l'attention à la quantité : quelques titres par an, défendus longtemps.",
+    "latestTitle": "Dernières parutions",
+    "allProjects": "Tous les projets"
+  },
+  "projects": {
+    "metaTitle": "Projets",
+    "metaDescription": "Le catalogue de la maison : romans, récits et formes brèves.",
+    "title": "Nos projets",
+    "intro": "Romans, récits, formes brèves — le catalogue de la maison.",
+    "empty": "Le catalogue arrive bientôt."
+  },
+  "project": {
+    "publishedOn": "Paru le {date}",
+    "previewsTitle": "Feuilleter quelques pages",
+    "previewAlt": "{title} — page {number}",
+    "backToList": "Tous les projets"
+  },
+  "notFound": {
+    "title": "Page introuvable",
+    "text": "La page que vous cherchez n'existe pas ou n'existe plus.",
+    "backHome": "Retour à l'accueil"
+  },
+  "footer": {
+    "contact": "Contact",
+    "rights": "Tous droits réservés"
   }
 }

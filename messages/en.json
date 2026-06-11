@@ -1,9 +1,47 @@
 {
+  "site": {
+    "tagline": "Books made with care",
+    "description": "An independent publishing house. We publish few books, slowly: narratives, novels and short forms chosen to last."
+  },
   "nav": {
     "home": "Home",
     "projects": "Projects"
   },
+  "localeSwitcher": {
+    "label": "Language",
+    "fr": "Français",
+    "en": "English"
+  },
   "home": {
-    "title": "Publishing house"
+    "heroTitle": "Books made with care",
+    "heroText": "An independent publishing house, we publish few books, slowly — narratives, novels, short forms. Texts we hold dear, made to last.",
+    "heroCta": "Discover our projects",
+    "aboutTitle": "The house",
+    "aboutP1": "Founded on a simple conviction — a book is an object of slow time —, the house champions singular writing and careful craft: chosen paper, drawn typography, traditional binding.",
+    "aboutP2": "Each project is carried out as a companionship with its author, from manuscript to bookshop. We prefer attention to quantity: a few titles a year, championed for a long time.",
+    "latestTitle": "Latest releases",
+    "allProjects": "All projects"
+  },
+  "projects": {
+    "metaTitle": "Projects",
+    "metaDescription": "The house catalogue: novels, narratives and short forms.",
+    "title": "Our projects",
+    "intro": "Novels, narratives, short forms — the house catalogue.",
+    "empty": "The catalogue is coming soon."
+  },
+  "project": {
+    "publishedOn": "Published on {date}",
+    "previewsTitle": "Leaf through a few pages",
+    "previewAlt": "{title} — page {number}",
+    "backToList": "All projects"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "The page you are looking for does not exist or no longer exists.",
+    "backHome": "Back to home"
+  },
+  "footer": {
+    "contact": "Contact",
+    "rights": "All rights reserved"
   }
 }
