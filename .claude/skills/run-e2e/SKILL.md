@@ -14,8 +14,10 @@ npm run e2e:open   # Itération : reseed + serveur de DEV + Cypress interactif
 
 ## Ce qui se passe sous le capot
 
-1. `e2e:seed` : recrée `data/test.db` de zéro (`prisma db push --force-reset` sur la DB de
-   test) puis exécute `scripts/seed-e2e.ts` → données DÉTERMINISTES : 2 livres publiés
+1. `e2e:seed` : supprime les fichiers `data/test.db*` (`scripts/reset-test-db.cjs`, strictement
+   limité aux fichiers de test), reconstruit le schéma avec `prisma migrate deploy` (iso-prod :
+   valide les migrations committées) puis exécute `scripts/seed-e2e.ts` → données
+   DÉTERMINISTES : 2 livres publiés
    (slugs fixes `les-jardins-suspendus`, `cartographie-du-silence`), 1 brouillon
    (`manuscrit-inacheve`), le compte admin de test, et copie les images de fixtures dans
    `data/test-uploads`.
@@ -31,6 +33,15 @@ npm run e2e:open   # Itération : reseed + serveur de DEV + Cypress interactif
 npm run e2e:seed && npm run e2e:build
 npx start-server-and-test e2e:start http://localhost:3000 "npx cypress run --spec cypress/e2e/admin/book-crud.cy.ts"
 ```
+
+## Pièges machine connus
+
+- **Cypress lancé depuis VS Code** : l'environnement hérite `ELECTRON_RUN_AS_NODE=1`, ce qui
+  fait démarrer Cypress.exe en mode Node pur (erreur « bad option: --smoke-test »). Les scripts
+  `cy:run`/`cy:open` passent par `scripts/run-cypress.cjs` qui purge la variable — toujours
+  lancer Cypress via les scripts npm, jamais `npx cypress` directement.
+- **Smart App Control (Windows)** peut bloquer des DLL natives trop récentes (vécu avec sharp
+  0.35.0). `scripts/fix-sharp-wasm.cjs` (postinstall) bascule alors sharp en WebAssembly.
 
 ## Diagnostic d'un échec, dans l'ordre
 

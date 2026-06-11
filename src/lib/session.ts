@@ -18,7 +18,12 @@ function sessionOptions(): SessionOptions {
     cookieOptions: {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      // Secure in production — except when explicitly overridden (.env.test runs
+      // the production build over plain http://localhost for Cypress).
+      secure:
+        process.env.SESSION_COOKIE_SECURE !== undefined
+          ? process.env.SESSION_COOKIE_SECURE === "true"
+          : process.env.NODE_ENV === "production",
     },
   };
 }
