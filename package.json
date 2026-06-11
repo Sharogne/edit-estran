@@ -6,21 +6,47 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "e2e:seed": "dotenv -e .env.test -- npx prisma db push --force-reset --skip-generate && dotenv -e .env.test -- tsx scripts/seed-e2e.ts",
+    "e2e:build": "dotenv -e .env.test -- next build",
+    "e2e:start": "dotenv -e .env.test -- next start",
+    "e2e:dev": "dotenv -e .env.test -- next dev",
+    "cy:run": "cypress run",
+    "cy:open": "cypress open",
+    "e2e": "npm run e2e:seed && npm run e2e:build && start-server-and-test e2e:start http://localhost:3000 cy:run",
+    "e2e:open": "npm run e2e:seed && start-server-and-test e2e:dev http://localhost:3000 cy:open"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
+    "iron-session": "^8.0.4",
     "next": "16.2.9",
+    "next-intl": "^4.13.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "sharp": "^0.35.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cypress": "^15.17.0",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "prettier": "^3.8.4",
+    "prisma": "^6.19.3",
+    "start-server-and-test": "^3.0.10",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

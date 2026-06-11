@@ -1,0 +1,9 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "projects": "Projets"
+  },
+  "home": {
+    "title": "Maison d'édition"
+  }
+}
