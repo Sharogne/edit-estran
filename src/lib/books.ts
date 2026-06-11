@@ -89,3 +89,37 @@ export async function getPublishedSlugs(): Promise<string[]> {
   });
   return books.map((b) => b.slug);
 }
+
+// --- Admin queries (back office only — callers must have passed requireAdmin) ---
+
+export async function getAllBooksForAdmin() {
+  const books = await prisma.book.findMany({
+    orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
+    include: {
+      translations: true,
+      _count: { select: { previewPages: true } },
+    },
+  });
+  return books.map((book) => ({
+    id: book.id,
+    slug: book.slug,
+    status: book.status,
+    publishedAt: book.publishedAt,
+    updatedAt: book.updatedAt,
+    coverImage: book.coverImage,
+    previewCount: book._count.previewPages,
+    title: pickTranslation(book, "fr")?.title ?? book.slug,
+  }));
+}
+
+export async function getBookForAdmin(id: string) {
+  return prisma.book.findUnique({
+    where: { id },
+    include: {
+      translations: true,
+      previewPages: { orderBy: { sortOrder: "asc" } },
+    },
+  });
+}
+
+export type AdminBook = NonNullable<Awaited<ReturnType<typeof getBookForAdmin>>>;
