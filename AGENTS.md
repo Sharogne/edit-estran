@@ -49,10 +49,12 @@ src/
       projets/page.tsx         Liste des projets publiés
       projets/[slug]/page.tsx  Détail d'un livre (cover, synopsis, previews)
     admin/                     BACK OFFICE (hors locale, UI en français, html/body propre)
-      login/                   Page + action de connexion
-      livres/actions.ts        TOUTES les server actions livres (CRUD + uploads)
-      livres/nouveau/          Création
-      livres/[id]/             Édition
+      login/                   Page + actions login/logout (hors groupe protégé)
+      (protected)/             layout.tsx = garde requireAdmin pour tout le groupe
+        page.tsx               Dashboard : liste des livres
+        livres/actions.ts      TOUTES les server actions livres (CRUD + uploads)
+        livres/nouveau/        Création
+        livres/[id]/           Édition (previews, suppression)
     uploads/[...path]/route.ts Sert les fichiers de UPLOADS_DIR (Nginx prend le relais en prod)
     sitemap.ts, robots.ts      SEO
 cypress/e2e/{public,admin}/    Specs e2e
@@ -131,3 +133,11 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
 **Règle d'évolution des piliers** : quand une itération révèle une procédure récurrente non
 couverte, créer le skill correspondant (même format) ; quand un skill ment (commande/chemin
 obsolète), le corriger DANS la même session. Les piliers doivent toujours refléter la réalité.
+
+## Particularités de la machine de dev (Windows 11)
+
+Deux pièges documentés en détail dans le skill `run-e2e` (section « Pièges machine connus ») :
+Smart App Control peut bloquer des DLL natives trop récentes (parade automatique :
+`scripts/fix-sharp-wasm.cjs` en postinstall), et les shells lancés depuis VS Code héritent
+`ELECTRON_RUN_AS_NODE=1` qui casse Cypress (parade : toujours passer par `npm run cy:run` /
+`cy:open`, qui utilisent `scripts/run-cypress.cjs`).

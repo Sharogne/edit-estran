@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Maison d'édition — Site vitrine & back office
 
-## Getting Started
+Site vitrine bilingue (FR/EN) pour une maison d'édition, avec back office permettant à
+l'éditeur de gérer ses livres (couverture, titre, synopsis traduits, pages de preview, statut
+brouillon/publié). Pensé pour être hébergé sur un VPS OVH.
 
-First, run the development server:
+**Stack** : Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Prisma 6 + SQLite ·
+next-intl · iron-session · sharp · Cypress.
+
+> 📘 La documentation de référence (architecture, conventions, agents & skills Claude Code)
+> est dans [AGENTS.md](AGENTS.md). Les procédures opérationnelles sont dans
+> [.claude/skills/](.claude/skills/).
+
+## Démarrage rapide
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env       # puis éditer : SESSION_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
+npm install                # génère aussi le client Prisma (postinstall)
+npm run db:migrate         # crée data/app.db et applique les migrations
+npm run db:seed            # compte admin (.env) + catalogue de démonstration
+npm run dev                # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Site public : http://localhost:3000/fr (et `/en`)
+- Back office : http://localhost:3000/admin (identifiants du `.env`)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commandes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Commande | Rôle |
+| --- | --- |
+| `npm run dev` / `build` / `start` | Développement / build prod / serveur prod |
+| `npm run lint` / `format` | ESLint / Prettier |
+| `npm run db:migrate` | Nouvelle migration (dev) — voir skill `db-migrate` |
+| `npm run db:deploy` | Applique les migrations (prod) |
+| `npm run db:seed` | Seed admin + livres de démo |
+| `npm run db:studio` | Explorer la base |
+| `npm run e2e` | Suite Cypress complète headless (DB de test dédiée) |
+| `npm run e2e:open` | Cypress interactif sur serveur de dev |
 
-## Learn More
+## Tests e2e
 
-To learn more about Next.js, take a look at the following resources:
+21 tests couvrent les parcours essentiels : navigation publique FR/EN, visibilité des livres
+publiés (et invisibilité des brouillons), 404, authentification admin, et cycle de vie complet
+d'un livre (création avec uploads, édition, gestion des previews, dépublication, suppression).
+La suite tourne sur une base et un dossier d'uploads **dédiés au test** (`.env.test`) — vos
+données de dev ne sont jamais touchées. Détails : skill `run-e2e`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Déploiement (OVH VPS)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Procédure complète (installation initiale Node/PM2/Nginx/SSL, releases, backups, rollback) :
+[.claude/skills/deploy-ovh/SKILL.md](.claude/skills/deploy-ovh/SKILL.md). En résumé pour une
+release : `git pull && npm ci && npm run db:deploy && npm run build && pm2 reload edit`.
 
-## Deploy on Vercel
+## Évolutivité
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Ajouter un champ aux livres** (auteur, ISBN, prix…) : procédure pas-à-pas dans le skill
+  `add-book-field` (~10 fichiers, de la migration au test e2e).
+- **Ajouter une page publique** : skill `new-public-page`.
+- **Itérer sur le design** : tokens centralisés dans `src/app/globals.css` (`@theme`) ; méthode
+  et règles dans le skill `design-system` (agent dédié : `design-implementer`).

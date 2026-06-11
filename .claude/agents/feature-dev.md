@@ -18,7 +18,7 @@ page publique, `db-migrate` pour le schéma).
    le client ne fait que de l'UX.
 3. **Requêtes** : toute lecture passe par `src/lib/books.ts` (ou un module frère dans `lib/`),
    jamais de `prisma.` directement dans un composant ou une page.
-4. **Server actions** : dans le `actions.ts` du segment (`src/app/admin/livres/actions.ts`).
+4. **Server actions** : dans le `actions.ts` du segment (`src/app/admin/(protected)/livres/actions.ts`).
    Chaque action : `await requireAdmin()` en première ligne → parse Zod → mutation →
    `revalidatePath` des pages publiques touchées → retour `{ ok, error? }` typé.
 5. **UI admin** : composants dans `src/components/admin/`, formulaires avec `useActionState`,

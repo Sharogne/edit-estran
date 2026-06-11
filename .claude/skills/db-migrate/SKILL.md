@@ -23,7 +23,9 @@ Règles :
   doivent rester valides).
 - Ne JAMAIS éditer une migration déjà committée/appliquée → toujours une nouvelle migration.
 - SQLite ne supporte pas les enums Prisma → `String` + validation Zod.
-- `prisma db push` est réservé à la DB de test e2e (jetable). Jamais en dev partagé ni en prod.
+- `prisma db push` n'est utilisé NULLE PART dans ce projet (même la DB de test e2e est
+  reconstruite par `migrate deploy`, ce qui valide au passage les migrations committées).
+  Ne pas l'introduire.
 
 ## En production (VPS OVH)
 

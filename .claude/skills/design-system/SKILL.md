@@ -25,10 +25,13 @@ Tailwind v4 : un token `--color-accent` déclaré dans `@theme` donne les classe
 ## État actuel des tokens (à maintenir à jour)
 
 - `--color-paper` : fond principal (blanc cassé chaud) — `--color-ink` : texte principal
-- `--color-ink-muted` : texte secondaire — `--color-accent` : accent (liens, actions, détails)
+- `--color-ink-muted` : texte secondaire — `--color-accent` : accent (terracotta)
+- `--color-accent-deep` : accent foncé (hover, liens visités de l'accent)
 - `--color-line` : filets/bordures — `--color-surface` : fonds de cartes/encarts
+- `--color-paper-inverse` : fond sombre (réservé, pas encore utilisé)
 - `--font-display` : Fraunces (titres) — `--font-sans` : Inter (texte courant & UI)
-- `--radius-*`, `--shadow-*` : volontairement discrets (esthétique imprimée)
+  (variables next/font sous-jacentes : `--font-fraunces`, `--font-inter` dans `src/styles/fonts.ts`)
+- `--radius-sm`/`--radius-md`, `--shadow-book` : volontairement discrets (esthétique imprimée)
 
 L'admin utilise les mêmes tokens (pas de second thème à maintenir).
 

@@ -115,8 +115,10 @@ git checkout <commit_precedent> && npm ci && npm run build && pm2 reload edit
 
 ## Notes
 
-- Le build utilise `output: "standalone"` mais PM2 lance `npm start` (next start) : simple et
-  suffisant pour un VPS mono-app. `ecosystem.config.cjs` est committé à la racine.
+- PM2 lance Next directement (`node_modules/next/dist/bin/next start`, voir
+  `ecosystem.config.cjs` à la racine) : simple et suffisant pour un VPS mono-app. Pas de
+  `output: standalone` — le déploiement garde `node_modules` (requis de toute façon par
+  Prisma et le `npm ci` de release).
 - SQLite + uploads vivent dans `/srv/edit/shared/` : un `git pull`/`npm ci` ne peut PAS les
   détruire.
 - Surveiller : `pm2 monit`, logs Nginx dans `/var/log/nginx/`.

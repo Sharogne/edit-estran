@@ -40,7 +40,7 @@ modifier une migration déjà appliquée/committée.
 Ajouter le champ au(x) schéma(s) Zod (`bookFormSchema` : partie commune ou partie par-locale).
 C'est ici que vivent les contraintes réelles (longueur, format, plage de dates…).
 
-## 4. Server actions — `src/app/admin/livres/actions.ts`
+## 4. Server actions — `src/app/admin/(protected)/livres/actions.ts`
 
 Les actions `createBook`/`updateBook` mappent le résultat Zod vers Prisma : ajouter le champ au
 mapping (données `Book`) ou au bloc translations (données `BookTranslation`).
