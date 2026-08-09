@@ -26,7 +26,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      # `npm ci` cannot be used here: package-lock.json is generated on Windows,
+      # where npm does not record the transitive dependencies of optional
+      # packages targeting other platforms (@img/sharp-wasm32 -> @emnapi/*).
+      # The lock is therefore always "out of sync" from a Linux runner's point
+      # of view. `npm install` resolves the tree for this platform instead.
+      - run: npm install --no-audit --no-fund
 
       - name: Build the static demo
         run: npm run demo:build
