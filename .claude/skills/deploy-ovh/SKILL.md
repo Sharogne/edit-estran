@@ -30,7 +30,7 @@ pm2 startup   # exécuter la commande affichée (démarrage au boot)
 # --- Arborescence + code ---
 sudo mkdir -p /srv/edit/{app,shared/data,shared/uploads,backups}
 sudo chown -R deploy:deploy /srv/edit
-git clone <repo> /srv/edit/app && cd /srv/edit/app
+git clone https://github.com/Sharogne/edit-estran.git /srv/edit/app && cd /srv/edit/app
 
 # --- Environnement de prod ---
 cp .env.example .env

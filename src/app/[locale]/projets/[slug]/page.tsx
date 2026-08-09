@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { uploadSrc } from "@/lib/image-src";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
@@ -29,6 +30,8 @@ export async function generateMetadata({
       title: book.title,
       description: book.synopsis.slice(0, 200),
       type: "book",
+      // Resolved against metadataBase, which already carries any basePath —
+      // so this one stays a plain path (no uploadSrc) to avoid doubling it.
       ...(book.coverImage ? { images: [{ url: `/uploads/${book.coverImage}` }] } : {}),
     },
   };
@@ -62,7 +65,7 @@ export default async function ProjectPage({ params }: PageProps<"/[locale]/proje
             <div className="relative aspect-2/3 overflow-hidden rounded-sm bg-surface shadow-book">
               {book.coverImage ? (
                 <Image
-                  src={`/uploads/${book.coverImage}`}
+                  src={uploadSrc(book.coverImage)}
                   alt={book.title}
                   fill
                   priority
@@ -108,7 +111,7 @@ export default async function ProjectPage({ params }: PageProps<"/[locale]/proje
                   data-cy="project-preview-page"
                 >
                   <Image
-                    src={`/uploads/${page.imagePath}`}
+                    src={uploadSrc(page.imagePath)}
                     alt={t("previewAlt", { title: book.title, number: index + 1 })}
                     fill
                     sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"

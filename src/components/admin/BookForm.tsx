@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { uploadSrc } from "@/lib/image-src";
 import { useActionState } from "react";
 import type { BookActionState } from "@/app/admin/(protected)/livres/actions";
 import { slugify } from "@/lib/slugify";
@@ -201,7 +202,7 @@ export function BookForm({
           {defaults.coverImage && (
             <div className="relative h-36 w-24 shrink-0 overflow-hidden rounded-sm bg-surface shadow-book">
               <Image
-                src={`/uploads/${defaults.coverImage}`}
+                src={uploadSrc(defaults.coverImage)}
                 alt="Couverture actuelle"
                 fill
                 sizes="96px"

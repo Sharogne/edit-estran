@@ -1,14 +1,20 @@
+"use client";
+
+// STATIC DEMO BUILD — identical to the real component except for two things:
+// it is a client component (the demo actions are client functions), and image
+// sources go through uploadSrc() so images uploaded in the browser (data:
+// URLs) display alongside the seeded ones.
+
 import Image from "next/image";
-import { uploadSrc } from "@/lib/image-src";
 import {
   deletePreviewPage,
   movePreviewPage,
 } from "@/app/admin/(protected)/livres/actions";
+import { uploadSrc } from "@/lib/image-src";
 import { AddPreviewsForm } from "./AddPreviewsForm";
 
 type PreviewPage = { id: string; imagePath: string; sortOrder: number };
 
-// Server component: the list mutations are plain <form action> server actions.
 export function PreviewPagesManager({
   bookId,
   previewPages,

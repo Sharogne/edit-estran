@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { uploadSrc } from "@/lib/image-src";
 import { Link } from "@/i18n/navigation";
 import type { PublicBook } from "@/lib/books";
 
@@ -16,7 +17,7 @@ export function BookCard({ book, locale }: { book: PublicBook; locale: string })
       <div className="relative aspect-2/3 overflow-hidden rounded-sm bg-surface shadow-book">
         {book.coverImage ? (
           <Image
-            src={`/uploads/${book.coverImage}`}
+            src={uploadSrc(book.coverImage)}
             alt={book.title}
             fill
             sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 280px"

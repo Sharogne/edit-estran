@@ -45,6 +45,16 @@ d'un livre (création avec uploads, édition, gestion des previews, dépublicati
 La suite tourne sur une base et un dossier d'uploads **dédiés au test** (`.env.test`) — vos
 données de dev ne sont jamais touchées. Détails : skill `run-e2e`.
 
+## Démo en ligne
+
+<https://sharogne.github.io/edit-estran/> — le site public et une **maquette cliquable** du back
+office (login `admin` / `admin`), exportés en statique et publiés à chaque push sur `main`.
+
+Aucun serveur ni base derrière : les données du back office de démo vivent dans le navigateur
+du visiteur, et les pages publiques sont figées au build — un livre créé dans la démo n'apparaît
+donc pas sur le site public. Mécanique et limites : [demo/README.md](demo/README.md), skill
+`static-demo`.
+
 ## Déploiement (OVH VPS)
 
 Procédure complète (installation initiale Node/PM2/Nginx/SSL, releases, backups, rollback) :

@@ -17,6 +17,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "demo:build": "node scripts/build-static-demo.mjs",
     "e2e:seed": "node scripts/reset-test-db.cjs && dotenv -e .env.test -- npx prisma migrate deploy && dotenv -e .env.test -- tsx scripts/seed-e2e.ts",
     "e2e:build": "dotenv -e .env.test -- next build",
     "e2e:start": "dotenv -e .env.test -- next start",

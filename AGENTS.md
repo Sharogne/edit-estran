@@ -58,6 +58,8 @@ src/
     uploads/[...path]/route.ts Sert les fichiers de UPLOADS_DIR (Nginx prend le relais en prod)
     sitemap.ts, robots.ts      SEO
 cypress/e2e/{public,admin}/    Specs e2e
+demo/overlay/                 Surcouche de la démo statique GitHub Pages (voir demo/README.md)
+.github/workflows/pages.yml   Déploiement automatique de la démo sur chaque push `main`
 ```
 
 ## Commandes
@@ -75,6 +77,8 @@ npm run db:studio    # Inspection visuelle de la base
 
 npm run e2e          # Suite Cypress complète headless (seed + build + run)  [skill: run-e2e]
 npm run e2e:open     # Cypress interactif contre le serveur de dev
+
+npm run demo:build   # Build de la démo statique GitHub Pages dans out/     [skill: static-demo]
 ```
 
 ## Conventions — NON NÉGOCIABLES
@@ -129,6 +133,7 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
 | Ajouter une page publique (ex. contact, à-propos) | skill `new-public-page` |
 | Toucher au schéma / migrer la base | skill `db-migrate` |
 | Déployer ou configurer le VPS OVH | skill `deploy-ovh` |
+| Mettre à jour la démo statique GitHub Pages | skill `static-demo` |
 
 **Règle d'évolution des piliers** : quand une itération révèle une procédure récurrente non
 couverte, créer le skill correspondant (même format) ; quand un skill ment (commande/chemin
