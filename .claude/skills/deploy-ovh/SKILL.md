@@ -60,7 +60,10 @@ sauvegarde. (`npm run seed` écrirait le catalogue de démonstration — à ne l
 ```nginx
 server {
     server_name <domaine>;
-    client_max_body_size 20m;                      # uploads d'images (10 Mo par fichier)
+    client_max_body_size 24m;                      # > bodySizeLimit de Next (22 Mo, dérivé
+                                                   # de src/config/uploads.ts). En dessous,
+                                                   # Nginx renvoie un 413 et l'admin voit un
+                                                   # écran d'erreur au lieu d'un message.
 
     location /_next/static/ {
         alias /srv/edit/app/.next/static/;

@@ -40,6 +40,26 @@ describe("Règles de validation (admin)", () => {
     cy.storedBook("cy-fichier-invalide").should("be.null");
   });
 
+  it("refuse une image abîmée ou déguisée par son extension, sans l'envoyer", () => {
+    cy.visit("/admin/livres/nouveau");
+    remplirFormulaire("Cy Image Abimee");
+
+    // Type MIME parfaitement valide, contenu qui n'en est pas un : sous Windows
+    // `file.type` vient de l'extension, pas des octets. Sans décodage avant
+    // envoi, sharp lève côté serveur et l'éditeur reçoit la page d'erreur de
+    // Next — écran noir, saisie perdue.
+    cy.get("[data-cy=book-form-cover]").selectFile({
+      contents: Cypress.Buffer.from("ÿØÿ pas vraiment un JPEG"),
+      fileName: "couverture.jpg",
+      mimeType: "image/jpeg",
+    });
+
+    cy.get("[data-cy=book-form-error-cover]").should("be.visible").and("contain", "illisible");
+    cy.get("[data-cy=book-form-cover]").should("have.value", "");
+    cy.get("[data-cy=book-form-submit]").should("be.enabled");
+    cy.storedBook("cy-image-abimee").should("be.null");
+  });
+
   it("refuse un livre sans titre ni synopsis dans aucune langue", () => {
     cy.visit("/admin/livres/nouveau");
     cy.get("[data-cy=book-form-submit]").click();

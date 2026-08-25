@@ -15,6 +15,7 @@ import {
   imageFileSchema,
   reorderSchema,
 } from "@/lib/validation/book";
+import type { ImageVariant } from "@/lib/images";
 import { BACK_COVER, COVER_FULL, COVER_THUMB, processImage } from "@/lib/images";
 
 export type BookActionState = { error?: string; success?: boolean };
@@ -89,6 +90,31 @@ function imageFile(formData: FormData, field: string): File | undefined {
   return entry;
 }
 
+/**
+ * `processImage`, mais une image que sharp refuse devient un message.
+ *
+ * Le formulaire décode déjà le fichier avant l'envoi, mais ce contrôle vit dans
+ * le navigateur : il ne couvre ni un client qui poste directement, ni les cas
+ * que le navigateur décode et pas sharp. Or une exception qui s'échappe d'une
+ * server action ne produit pas d'erreur de formulaire — elle produit la page
+ * d'erreur générique de Next (« A server error occurred »), écran noir sans
+ * explication ET saisie perdue. Le dernier filet est donc ici.
+ */
+async function encoder(file: File, variant: ImageVariant): Promise<string> {
+  try {
+    return await processImage(file, variant);
+  } catch (cause) {
+    console.error(
+      `[admin] encodage impossible : ${file.name} (${file.type}, ${file.size} o)`,
+      cause
+    );
+    throw new ImageValidationError(
+      `${file.name || "Image"} — fichier illisible : il est abîmé, ou son contenu ne ` +
+        "correspond pas à son extension. Ouvrez-le puis ré-enregistrez-le en JPEG ou PNG."
+    );
+  }
+}
+
 type BookImages = Pick<StoredBook, "coverThumb" | "coverImage" | "backCoverImage">;
 
 const NO_IMAGES: BookImages = { coverThumb: null, coverImage: null, backCoverImage: null };
@@ -111,11 +137,11 @@ async function applyImages(
   if (cover) {
     // Two variants from the same upload: the thumb keeps list pages light, the
     // full one is what the book page displays.
-    next.coverThumb = await processImage(cover, COVER_THUMB);
-    next.coverImage = await processImage(cover, COVER_FULL);
+    next.coverThumb = await encoder(cover, COVER_THUMB);
+    next.coverImage = await encoder(cover, COVER_FULL);
   }
   if (backCover) {
-    next.backCoverImage = await processImage(backCover, BACK_COVER);
+    next.backCoverImage = await encoder(backCover, BACK_COVER);
   }
   return next;
 }
@@ -138,17 +164,18 @@ export async function createBook(
   if (!parsed.success) return { error: formatZodError(parsed.error) };
   const data = parsed.data;
 
-  let cover: File | undefined;
-  let backCover: File | undefined;
+  let images: BookImages;
   try {
-    cover = imageFile(formData, "cover");
-    backCover = imageFile(formData, "backCover");
+    images = await applyImages(
+      NO_IMAGES,
+      imageFile(formData, "cover"),
+      imageFile(formData, "backCover")
+    );
   } catch (error) {
     if (error instanceof ImageValidationError) return { error: error.message };
     throw error;
   }
 
-  const images = await applyImages(NO_IMAGES, cover, backCover);
   const bookId = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -192,17 +219,17 @@ export async function updateBook(
   if (!parsed.success) return { error: formatZodError(parsed.error) };
   const data = parsed.data;
 
-  let cover: File | undefined;
-  let backCover: File | undefined;
+  let images: BookImages;
   try {
-    cover = imageFile(formData, "cover");
-    backCover = imageFile(formData, "backCover");
+    images = await applyImages(
+      existing,
+      imageFile(formData, "cover"),
+      imageFile(formData, "backCover")
+    );
   } catch (error) {
     if (error instanceof ImageValidationError) return { error: error.message };
     throw error;
   }
-
-  const images = await applyImages(existing, cover, backCover);
 
   let nouveauSlug = existing.slug;
   try {

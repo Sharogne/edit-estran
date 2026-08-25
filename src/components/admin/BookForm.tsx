@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useActionState, useState } from "react";
 import type { BookActionState } from "@/app/admin/(protected)/livres/actions";
-import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/validation/book";
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS } from "@/config/uploads";
 import { Button } from "@/components/ui/Button";
 
 export type BookFormDefaults = {
@@ -57,20 +57,66 @@ function Repere({ texte }: { texte: string }) {
   );
 }
 const mo = (octets: number) => (octets / (1024 * 1024)).toFixed(1).replace(".", ",");
+const mpx = (pixels: number) => (pixels / 1_000_000).toFixed(0);
+
+/**
+ * Décode réellement le fichier pour en tirer ses dimensions.
+ *
+ * C'est le seul contrôle qui regarde le CONTENU : sous Windows, `file.type`
+ * est déduit de l'extension via la base de registre, donc un fichier corrompu,
+ * tronqué, ou simplement renommé en `.jpg` s'annonce `image/jpeg` sans en
+ * être une. Côté serveur, sharp lève alors une exception (« premature end of
+ * JPEG image », « unsupported image format ») — pas un message d'erreur.
+ *
+ * Retourne `null` quand le fichier est indécodable, `undefined` quand le
+ * navigateur ne sait pas faire le contrôle (on laisse alors le serveur trancher
+ * plutôt que de bloquer une image valide).
+ */
+async function dimensionsImage(
+  file: File
+): Promise<{ width: number; height: number } | null | undefined> {
+  if (typeof createImageBitmap !== "function") return undefined;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const taille = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return taille;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Vérifie un fichier AVANT l'envoi. Ce n'est pas un doublon de la validation
- * serveur : au-delà de `serverActions.bodySizeLimit` (15 Mo), Next rejette la
- * requête au transport et la server action n'est jamais appelée — elle n'a donc
- * aucun moyen de renvoyer une erreur exploitable. Sans ce contrôle, déposer une
- * image de 50 Mo produit une erreur fatale au lieu d'un message.
+ * serveur : les deux causes d'écran d'erreur Next (« A server error occurred »)
+ * sont hors de portée d'un message de formulaire.
+ *
+ *  - Au-delà de `serverActions.bodySizeLimit`, Next rejette la requête au
+ *    transport : la server action n'est jamais appelée.
+ *  - Sur un fichier que sharp ne sait pas décoder, ou trop grand pour son
+ *    `limitInputPixels`, l'encodage lève une exception au milieu de l'action.
+ *
+ * Les quatre contrôles vont donc du moins cher au plus cher : type, poids,
+ * décodage, dimensions.
  */
-function erreurFichier(file: File): string {
+async function erreurFichier(file: File): Promise<string> {
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    return "Format non supporté. Formats acceptés : JPEG, PNG, WebP ou AVIF.";
+    const type = file.type ? ` (${file.type})` : "";
+    return `Format non supporté${type}. Formats acceptés : JPEG, PNG, WebP ou AVIF.`;
   }
   if (file.size > MAX_IMAGE_BYTES) {
     return `Image trop lourde : ${mo(file.size)} Mo pour ${MAX_IMAGE_MO} Mo maximum. Réduisez-la avant de la déposer.`;
+  }
+
+  const taille = await dimensionsImage(file);
+  if (taille === null) {
+    return (
+      "Image illisible : le fichier est abîmé, ou son contenu ne correspond pas à son extension. " +
+      "Ouvrez-le puis ré-enregistrez-le en JPEG ou PNG."
+    );
+  }
+  if (taille && taille.width * taille.height > MAX_IMAGE_PIXELS) {
+    return `Image trop grande : ${taille.width} × ${taille.height} pixels, soit plus de ${mpx(MAX_IMAGE_PIXELS)} millions. Réduisez ses dimensions avant de la déposer.`;
   }
   return "";
 }
@@ -141,6 +187,9 @@ export function BookForm({
 }) {
   const [state, formAction, isPending] = useActionState<BookActionState, FormData>(action, {});
   const [erreursFichier, setErreursFichier] = useState<Record<string, string>>({});
+  // Le décodage d'une image est asynchrone : sans ce compteur, un envoi lancé
+  // dans la foulée du choix de fichier partirait avant le verdict.
+  const [verifications, setVerifications] = useState(0);
 
   // On verrouille le titre QUI A PRODUIT l'adresse, pas les deux : sinon on
   // interdirait d'ajouter la traduction anglaise d'un livre déjà publié, alors
@@ -178,12 +227,21 @@ export function BookForm({
     if (!accepte) event.target.value = "draft";
   }
 
-  function verifierFichier(name: string, input: HTMLInputElement) {
+  async function verifierFichier(name: string, input: HTMLInputElement) {
     const file = input.files?.[0];
-    const erreur = file ? erreurFichier(file) : "";
-    // Vider l'input : sans ça le fichier refusé partirait quand même à l'envoi.
-    if (erreur) input.value = "";
-    setErreursFichier((precedent) => ({ ...precedent, [name]: erreur }));
+    if (!file) {
+      setErreursFichier((precedent) => ({ ...precedent, [name]: "" }));
+      return;
+    }
+    setVerifications((nombre) => nombre + 1);
+    try {
+      const erreur = await erreurFichier(file);
+      // Vider l'input : sans ça le fichier refusé partirait quand même à l'envoi.
+      if (erreur) input.value = "";
+      setErreursFichier((precedent) => ({ ...precedent, [name]: erreur }));
+    } finally {
+      setVerifications((nombre) => nombre - 1);
+    }
   }
 
   return (
@@ -398,8 +456,14 @@ export function BookForm({
       )}
 
       <div className="flex items-center gap-4 border-t border-line pt-6">
-        <Button type="submit" disabled={isPending} data-cy="book-form-submit">
-          {isPending ? "Enregistrement…" : mode === "create" ? "Créer le livre" : "Enregistrer"}
+        <Button type="submit" disabled={isPending || verifications > 0} data-cy="book-form-submit">
+          {verifications > 0
+            ? "Vérification de l'image…"
+            : isPending
+              ? "Enregistrement…"
+              : mode === "create"
+                ? "Créer le livre"
+                : "Enregistrer"}
         </Button>
       </div>
     </form>

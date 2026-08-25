@@ -30,6 +30,7 @@ scripts/seed-content.ts        Écrit content.json (dev : catalogue démo ; --e2
 scripts/hash-password.mjs      Génère la ligne ADMIN_PASSWORD_HASH_B64 à coller dans .env
 src/
   config/site.ts               Identité du site (nom, baseline, contact) — branding centralisé
+  config/uploads.ts            Limites d'import des images — partagées formulaire / Zod / next.config
   i18n/                        routing.ts (locales), request.ts, navigation.ts (Link locale-aware)
   proxy.ts                     Middleware next-intl — matcher EXCLUT /admin /api /og
   lib/
@@ -143,9 +144,17 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
   expandent `$nom`. `@next/env` ré-expand même ce que `dotenv-cli` a déjà résolu, ce qui
   tronque un hash brut en silence et fait échouer le login sans message. Toujours coller la
   sortie de `scripts/hash-password.mjs`, jamais un hash à la main.
-- Images : type MIME et taille validés par Zod (10 Mo max) ; encodage via `src/lib/images.ts`
-  uniquement. Aucun chemin fourni par l'utilisateur n'atteint le filesystem — le seul fichier
-  écrit est `content.json`.
+- Images : type MIME et taille validés par Zod ; encodage via `src/lib/images.ts` uniquement.
+  Aucun chemin fourni par l'utilisateur n'atteint le filesystem — le seul fichier écrit est
+  `content.json`.
+- **Limites d'import : `src/config/uploads.ts`, nulle part ailleurs.** Le formulaire les applique
+  AVANT l'envoi (type, poids, décodage réel du fichier, nombre de pixels) et `next.config.ts` en
+  dérive `serverActions.bodySizeLimit`. Motif : les deux échecs qui comptent — dépassement du
+  plafond de transport et exception sharp sur un fichier illisible — échappent au formulaire et
+  produisent la page d'erreur générique de Next (« A server error occurred »), écran noir qui perd
+  la saisie. Toute image encodée passe donc par `encoder()` (livres/actions.ts), qui renvoie un
+  message plutôt que de laisser filer l'exception. Côté serveur d'entrée, Nginx doit rester
+  au-dessus du plafond de Next (skill `deploy-ovh`), sinon c'est lui qui renvoie un 413.
 - `robots.txt` exclut `/admin`.
 
 ## Agents & skills du projet

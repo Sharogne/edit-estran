@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/config/uploads";
 
 // Single source of truth for book form constraints (used by all server actions).
 
@@ -60,13 +61,17 @@ export type BookFormValues = z.infer<typeof bookFormSchema>;
 
 // --- Image uploads ---
 
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
-export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+// Les limites elles-mêmes vivent dans src/config/uploads.ts : elles sont
+// partagées avec le formulaire (contrôle avant envoi) et avec next.config.ts
+// (plafond de transport). Ici on ne fait que les exprimer en schéma.
 
 export const imageFileSchema = z
   .custom<File>((value) => value instanceof File, "Fichier invalide")
   .refine((file) => file.size > 0, "Fichier vide")
-  .refine((file) => file.size <= MAX_IMAGE_BYTES, "Image trop lourde (10 Mo max)")
+  .refine(
+    (file) => file.size <= MAX_IMAGE_BYTES,
+    `Image trop lourde (${MAX_IMAGE_BYTES / (1024 * 1024)} Mo max)`
+  )
   .refine(
     (file) => ALLOWED_IMAGE_TYPES.includes(file.type),
     "Format non supporté (JPEG, PNG, WebP ou AVIF)"
