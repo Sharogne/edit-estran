@@ -27,6 +27,7 @@ set -a
 # shellcheck disable=SC1091
 source .env.staging
 set +a
+PORT="${STAGING_PORT:-3100}"
 
 for variable in NEXT_PUBLIC_SITE_URL SESSION_SECRET ADMIN_EMAIL ADMIN_PASSWORD_HASH_B64; do
   if [[ -z "${!variable:-}" ]]; then
@@ -101,7 +102,7 @@ echo "→ Vérifications"
 verifier() {
   local chemin="$1" attendu="$2"
   local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3000$chemin")"
+  code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT$chemin")"
   if [[ "$code" != "$attendu" ]]; then
     echo "✗ $chemin a répondu $code au lieu de $attendu" >&2
     return 1
@@ -115,7 +116,7 @@ verifier /admin/login 200
 
 # LE contrôle qui justifie ce script : un staging en ligne DOIT être fermé aux
 # moteurs. Si ce test tombe, le site est exposé à l'indexation.
-ROBOTS="$(curl -s http://127.0.0.1:3000/robots.txt)"
+ROBOTS="$(curl -s "http://127.0.0.1:$PORT/robots.txt")"
 if ! grep -qi 'Disallow: /$' <<<"$ROBOTS"; then
   echo "✗ robots.txt n'interdit PAS l'indexation. Le staging serait référencé." >&2
   echo "  Vérifiez que SITE_ENV vaut bien \"staging\" dans compose.yml." >&2
@@ -135,10 +136,10 @@ if command -v tailscale >/dev/null 2>&1; then
     tailscale funnel status | sed 's/^/    /'
   else
     echo "→ Funnel pas encore activé. Une fois pour toutes :"
-    echo "    sudo tailscale funnel --bg 3000"
+    echo "    sudo tailscale funnel --bg $PORT"
   fi
 else
-  echo "→ Tailscale absent : le site n'écoute que sur 127.0.0.1:3000."
+  echo "→ Tailscale absent : le site n'écoute que sur 127.0.0.1:$PORT."
   echo "  Voir le skill deploy-staging pour l'installation."
 fi
 

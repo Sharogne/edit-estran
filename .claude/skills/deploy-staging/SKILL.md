@@ -11,9 +11,9 @@ allumée, sans rien exposer de la box.
 
 ```
 ThinkPad
-  Docker : conteneur edit-staging, écoute 127.0.0.1:3000 UNIQUEMENT
+  Docker : conteneur edit-staging, écoute 127.0.0.1:3100 UNIQUEMENT
   Volume : edit_edit-content → /data/content.json
-  Tailscale Funnel : expose 3000 sur https://<machine>.<tailnet>.ts.net
+  Tailscale Funnel : expose 3100 sur https://<machine>.<tailnet>.ts.net
 ```
 
 Aucun port ouvert sur la box, l'IP domestique reste masquée, et le DNS du
@@ -63,7 +63,7 @@ Funnel a besoin de deux réglages **dans la console d'administration Tailscale**
 Puis, une fois pour toutes :
 
 ```bash
-sudo tailscale funnel --bg 3000
+sudo tailscale funnel --bg 3100
 ```
 
 ```bash
@@ -160,8 +160,10 @@ docker compose up -d
 - **Le conteneur n'écoute que sur `127.0.0.1`.** C'est Tailscale qui décide de ce
   qui sort. Ne pas publier le port sur `0.0.0.0` : ce serait exposer le back
   office à tout le réseau local.
-- **Le ThinkPad héberge déjà d'autres services** (Home Assistant, AdGuard).
-  Vérifier que le port 3000 est libre : `sudo ss -tlnp | grep 3000`.
+- **Le port 3000 est déjà pris par AdGuard** sur le ThinkPad. Le staging écoute
+  donc sur 3100 (`STAGING_PORT`). Vérifier avant tout changement :
+  `ss -tlnp | grep 3100`. Ne jamais toucher aux conteneurs de production
+  (Home Assistant, AdGuard, Jellyfin, Samba…).
 
 ## Différences avec la production
 

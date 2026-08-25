@@ -11,8 +11,9 @@ services:
     container_name: edit-staging
     restart: unless-stopped
     # 127.0.0.1 uniquement : c'est Tailscale qui décide de ce qui sort.
+    # Port hôte configurable : 3000 est déjà pris par AdGuard sur le ThinkPad.
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${STAGING_PORT:-3100}:3000"
     environment:
       CONTENT_FILE: /data/content.json
       SITE_ENV: staging
