@@ -4,9 +4,17 @@
 FROM node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+# `npm install` et non `npm ci`, à contrecœur mais sciemment : le
+# package-lock.json est généré sous Windows, où npm n'enregistre pas les
+# dépendances transitives des paquets optionnels de sharp (@img/sharp-wasm32 →
+# @emnapi/*, @swc/helpers). Vu depuis Linux le lock est donc « out of sync » et
+# `npm ci` refuse de tourner. Même constat que l'ancien workflow GitHub Actions
+# du dépôt. Ne pas « corriger » en remettant npm ci sans avoir d'abord
+# régénéré le lock sur Linux.
+#
 # --ignore-scripts : le postinstall bascule sharp en WebAssembly, parade utile
-# sur la machine Windows de dev mais nuisible ici où le natif fonctionne.
-RUN npm ci --ignore-scripts
+# sur la machine Windows de dev mais nuisible ici où le binaire natif fonctionne.
+RUN npm install --no-audit --no-fund --ignore-scripts
 
 FROM node:22-slim AS builder
 WORKDIR /app
