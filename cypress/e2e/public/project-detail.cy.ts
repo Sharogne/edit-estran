@@ -42,6 +42,26 @@ describe("Fiche projet", () => {
     cy.get("[data-cy=project-back-cover]").parent().should("have.attr", "aria-hidden", "false");
   });
 
+  it("propose le bouton d'achat quand un lien est renseigné", () => {
+    // le seed donne un lien marchand à ce livre, pas à cartographie-du-silence
+    cy.visit("/fr/projets/les-jardins-suspendus");
+    cy.get("[data-cy=project-buy]").should("be.visible").and("contain", "Acheter");
+    cy.get("[data-cy=project-buy]")
+      .should("have.attr", "href", "https://exemple-librairie.test/les-jardins-suspendus")
+      .and("have.attr", "target", "_blank");
+    // reverse tabnabbing : un lien sortant en nouvel onglet doit être isolé
+    cy.get("[data-cy=project-buy]").invoke("attr", "rel").should("contain", "noopener");
+
+    cy.visit("/en/projets/les-jardins-suspendus");
+    cy.get("[data-cy=project-buy]").should("contain", "Buy");
+  });
+
+  it("n'affiche aucun bouton d'achat sans lien renseigné", () => {
+    cy.visit("/fr/projets/cartographie-du-silence");
+    cy.get("[data-cy=project-title]").should("be.visible");
+    cy.get("[data-cy=project-buy]").should("not.exist");
+  });
+
   it("affiche la traduction anglaise", () => {
     cy.visit("/en/projets/les-jardins-suspendus");
     cy.get("[data-cy=project-title]").should("contain", "The Hanging Gardens");

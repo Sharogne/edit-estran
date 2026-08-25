@@ -95,6 +95,15 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
 - Le store garde le fichier en mémoire → **un seul process** (`instances: 1` côté PM2). Un mode
   cluster ferait diverger les caches.
 - Le fichier vit HORS du répertoire de build (`CONTENT_FILE`), pour survivre aux déploiements.
+- **L'adresse publique d'un livre (`slug`) n'est pas saisie** : elle est dérivée du titre FR, à
+  défaut du titre EN, et suffixée (`-2`, `-3`) en cas de doublon. Elle suit le titre tant que le
+  livre n'a jamais été publié (`publishedAt === null`), puis elle est **figée** : une URL déjà
+  diffusée ne doit pas casser parce qu'on corrige une coquille. Côté formulaire, le titre qui a
+  produit l'adresse passe en `readOnly` (jamais `disabled` : un champ désactivé n'est pas envoyé
+  et effacerait le titre), et basculer un livre en « Publié » demande confirmation. Ces deux
+  garde-fous sont de l'aide à la saisie — **la règle est appliquée côté serveur** (`slugFige`).
+- **L'ordre du catalogue (`sortOrder`) n'est pas saisi non plus** : il se règle au glisser-déposer
+  dans le tableau de bord (action `reorderBooks`). Un livre créé prend le dernier rang.
 - Les pages publiques qui lisent le contenu sont en `export const dynamic = "force-dynamic"`.
   Le rendu ne coûte qu'une lecture mémoire (~10 ms), alors qu'un pré-rendu figé au build
   reservirait le catalogue tel qu'il était au build après tout redémarrage non précédé d'un

@@ -23,9 +23,12 @@ export default async function EditBookPage({ params }: PageProps<"/admin/livres/
     slug: book.slug,
     status: book.status,
     publishedAt: book.publishedAt ? book.publishedAt.toISOString().slice(0, 10) : "",
-    sortOrder: book.sortOrder,
     coverThumb: book.coverThumb,
     backCoverImage: book.backCoverImage,
+    purchaseUrl: book.purchaseUrl ?? "",
+    // Miroir exact de slugFige() côté serveur : une date de parution signe un
+    // livre déjà rendu public, donc une adresse qui a pu circuler.
+    urlFigee: book.publishedAt !== null,
     fr: { title: fr?.title ?? "", synopsis: fr?.synopsis ?? "" },
     en: { title: en?.title ?? "", synopsis: en?.synopsis ?? "" },
   };

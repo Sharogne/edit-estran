@@ -10,7 +10,11 @@ export function LocaleSwitcher() {
   const t = useTranslations("localeSwitcher");
 
   return (
-    <nav aria-label={t("label")} className="flex items-center gap-1 text-sm" data-cy="locale-switcher">
+    <nav
+      aria-label={t("label")}
+      className="flex items-center gap-1 text-sm"
+      data-cy="locale-switcher"
+    >
       {routing.locales.map((l) => (
         <Link
           key={l}

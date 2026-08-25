@@ -21,6 +21,7 @@ type StoredBookShape = {
   coverThumb: string | null;
   coverImage: string | null;
   backCoverImage: string | null;
+  purchaseUrl: string | null;
   translations: Record<string, { title: string; synopsis: string }>;
 };
 
@@ -77,6 +78,7 @@ export default defineConfig({
             status: book.status,
             sortOrder: book.sortOrder,
             publishedAt: book.publishedAt,
+            purchaseUrl: book.purchaseUrl,
             fields: Object.keys(book).sort(),
             coverThumb: imageProbe(book.coverThumb),
             coverImage: imageProbe(book.coverImage),
@@ -93,6 +95,12 @@ export default defineConfig({
           return readJson<{ books: StoredBookShape[] }>(contentFile())
             .books.map((book) => book.slug)
             .sort();
+        },
+
+        /** Prints to the terminal running Cypress — a spec cannot write to stdout. */
+        log(message: string) {
+          console.log(message);
+          return null;
         },
 
         /** Dotted key lists of both message files — the FR/EN parity rule. */

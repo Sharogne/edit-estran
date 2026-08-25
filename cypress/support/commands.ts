@@ -7,6 +7,7 @@ export type StoredBookProbe = {
   status: string;
   sortOrder: number;
   publishedAt: string | null;
+  purchaseUrl: string | null;
   fields: string[];
   coverThumb: { prefix: string; bytes: number } | null;
   coverImage: { prefix: string; bytes: number } | null;

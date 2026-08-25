@@ -1,19 +1,20 @@
-// Sans base de données, deux garanties que le moteur SQL offrait gratuitement
-// sont devenues du code applicatif : l'unicité du slug (index unique → `some()`
-// en JS) et le rejet des fichiers non-images. Ces tests les couvrent.
+// Les garanties que le moteur SQL offrait gratuitement sont devenues du code
+// applicatif. Ce fichier couvre les REFUS ; la dérivation des adresses et leur
+// unicité vivent dans book-slug.cy.ts.
 //
 // Aucun cas de ce fichier ne doit écrire quoi que ce soit : chaque test vérifie
 // aussi que le contenu stocké est resté intact.
 
-const SEED_SLUG = "les-jardins-suspendus";
-
-/** Remplit les champs obligatoires du formulaire, slug compris. */
-function remplirFormulaire(slug: string) {
-  cy.get("[data-cy=book-form-title-fr]").clear().type("Doublon de test");
+/**
+ * Remplit les champs du formulaire. L'adresse n'est plus saisie : elle découle
+ * du titre français, d'où des titres commençant par « Cy » pour continuer à
+ * produire des slugs `cy-…` que les specs publiques savent ignorer.
+ */
+function remplirFormulaire(titre: string) {
+  cy.get("[data-cy=book-form-title-fr]").clear().type(titre);
   cy.get("[data-cy=book-form-synopsis-fr]").clear().type("Synopsis FR de contrôle.");
-  cy.get("[data-cy=book-form-title-en]").clear().type("Test duplicate");
+  cy.get("[data-cy=book-form-title-en]").clear().type("Control title");
   cy.get("[data-cy=book-form-synopsis-en]").clear().type("Control EN synopsis.");
-  cy.get("[data-cy=book-form-slug]").clear().type(slug);
 }
 
 describe("Règles de validation (admin)", () => {
@@ -21,60 +22,67 @@ describe("Règles de validation (admin)", () => {
     cy.login();
   });
 
-  it("refuse un slug déjà pris à la création, sans rien créer", () => {
-    cy.task<string[]>("storedSlugs").then((avant) => {
-      cy.visit("/admin/livres/nouveau");
-      remplirFormulaire(SEED_SLUG);
-      cy.get("[data-cy=book-form-submit]").click();
-
-      cy.get("[data-cy=book-form-error]").should("contain", "déjà utilisé");
-      // pas de redirection vers une page d'édition : rien n'a été créé
-      cy.url().should("include", "/admin/livres/nouveau");
-      cy.task<string[]>("storedSlugs").should("deep.equal", avant);
-    });
-  });
-
-  it("refuse un slug déjà pris à l'édition et laisse le livre intact", () => {
-    cy.visit("/admin");
-    cy.get("[data-cy=admin-book-row-cartographie-du-silence]").click();
-
-    cy.get("[data-cy=book-form-slug]").clear().type(SEED_SLUG);
-    cy.get("[data-cy=book-form-submit]").click();
-    cy.get("[data-cy=book-form-error]").should("contain", "déjà utilisé");
-    cy.get("[data-cy=book-form-success]").should("not.exist");
-
-    // L'erreur est levée DANS la mutation, donc le fichier n'est jamais réécrit.
-    cy.storedBook("cartographie-du-silence").should((livre) => {
-      expect(livre, "le livre existe toujours").to.not.equal(null);
-      expect(livre!.slug).to.eq("cartographie-du-silence");
-      expect(livre!.titles.fr).to.eq("Cartographie du silence");
-    });
-  });
-
-  it("refuse un fichier qui n'est pas une image", () => {
+  it("refuse un fichier qui n'est pas une image, sans l'envoyer", () => {
     cy.visit("/admin/livres/nouveau");
-    remplirFormulaire("cy-fichier-invalide");
+    remplirFormulaire("Cy Fichier Invalide");
     cy.get("[data-cy=book-form-cover]").selectFile({
       contents: Cypress.Buffer.from("ceci n'est pas une image"),
       fileName: "notes.txt",
       mimeType: "text/plain",
     });
-    cy.get("[data-cy=book-form-submit]").click();
 
-    cy.get("[data-cy=book-form-error]").should("contain", "Format non supporté");
+    // Le rejet est immédiat, côté navigateur : pas d'aller-retour serveur et
+    // surtout pas d'envoi inutile. Le champ est vidé dans la foulée.
+    cy.get("[data-cy=book-form-error-cover]")
+      .should("be.visible")
+      .and("contain", "Format non supporté");
+    cy.get("[data-cy=book-form-cover]").should("have.value", "");
     cy.storedBook("cy-fichier-invalide").should("be.null");
   });
 
-  it("refuse un slug mal formé côté serveur, même si le garde-fou HTML est contourné", () => {
+  it("refuse un livre sans titre ni synopsis dans aucune langue", () => {
     cy.visit("/admin/livres/nouveau");
-    remplirFormulaire("cy-slug-provisoire");
-    // `pattern` empêche l'envoi côté navigateur : on le retire pour atteindre Zod.
-    cy.get("[data-cy=book-form-slug]").invoke("removeAttr", "pattern");
-    cy.get("[data-cy=book-form-slug]").clear().type("Slug Invalide !");
     cy.get("[data-cy=book-form-submit]").click();
 
-    cy.get("[data-cy=book-form-error]").should("contain", "Slug invalide");
-    cy.storedBook("cy-slug-provisoire").should("be.null");
+    // Les champs traduits ne sont plus `required` en HTML : c'est le serveur qui
+    // impose « au moins une langue », et son message doit être explicite.
+    cy.get("[data-cy=book-form-error]").should("contain", "au moins une langue");
+    // Rien n'a été créé : le catalogue est inchangé.
+    cy.task<string[]>("storedSlugs").should("have.length", 3);
+  });
+
+  it("refuse un lien d'achat non http(s) et nomme le champ en français", () => {
+    cy.visit("/admin/livres/nouveau");
+    remplirFormulaire("Cy Lien Invalide");
+    // `javascript:alert(1)` est une URL absolue valide : le navigateur la laisse
+    // passer. C'est donc bien au serveur de refuser — sans quoi ce lien finirait
+    // dans un href sur la fiche publique.
+    cy.get("[data-cy=book-form-purchase-url]").clear().type("javascript:alert(1)");
+    cy.get("[data-cy=book-form-submit]").click();
+
+    cy.get("[data-cy=book-form-error]").should("contain", "Lien d'achat").and("contain", "http");
+    cy.storedBook("cy-lien-invalide").should("be.null");
+  });
+
+  it("bloque une image trop lourde côté navigateur, sans rien envoyer", () => {
+    cy.visit("/admin/livres/nouveau");
+    remplirFormulaire("Cy Image Lourde");
+
+    // 11 Mo : au-dessus des 10 Mo autorisés. Le contrôle doit se faire AVANT
+    // l'envoi — au-delà de bodySizeLimit, Next rejette la requête au transport
+    // et la server action n'a aucun moyen de renvoyer un message.
+    cy.get("[data-cy=book-form-cover]").selectFile({
+      contents: Cypress.Buffer.alloc(11 * 1024 * 1024, 1),
+      fileName: "trop-lourde.jpg",
+      mimeType: "image/jpeg",
+    });
+
+    cy.get("[data-cy=book-form-error-cover]")
+      .should("be.visible")
+      .and("contain", "trop lourde")
+      .and("contain", "10 Mo");
+    // le champ est vidé : le fichier refusé ne peut pas partir malgré tout
+    cy.get("[data-cy=book-form-cover]").should("have.value", "");
   });
 });
 

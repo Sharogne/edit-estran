@@ -7,14 +7,12 @@
 // `before` de nettoyage, qui rend chaque run indépendant du précédent.
 
 const SLUG = "cy-livre-test";
-const SLUG_RENOMME = "cy-livre-renomme";
-const TITLE_FR = "Le Livre des tests";
+const TITLE_FR = "Cy Livre Test";
 const TITLE_EN = "The Book of Tests";
 
 describe("CRUD livre (admin)", () => {
   before(() => {
     cy.removeBookIfPresent(SLUG);
-    cy.removeBookIfPresent(SLUG_RENOMME);
   });
 
   beforeEach(() => {
@@ -28,11 +26,6 @@ describe("CRUD livre (admin)", () => {
     cy.get("[data-cy=book-form-synopsis-fr]").type(
       "Un synopsis de test écrit par Cypress, suffisamment long pour être réaliste."
     );
-    // le slug est auto-suggéré depuis le titre FR…
-    cy.get("[data-cy=book-form-slug]").should("have.value", "le-livre-des-tests");
-    // …mais on le contrôle explicitement
-    cy.get("[data-cy=book-form-slug]").clear().type(SLUG);
-
     cy.get("[data-cy=book-form-title-en]").type(TITLE_EN);
     cy.get("[data-cy=book-form-synopsis-en]").type(
       "A test synopsis written by Cypress, long enough to feel realistic."
@@ -81,27 +74,6 @@ describe("CRUD livre (admin)", () => {
 
     cy.visit(`/fr/projets/${SLUG}`);
     cy.get("[data-cy=project-synopsis]").should("contain", "Synopsis modifié par Cypress");
-  });
-
-  it("renomme le slug : l'ancienne URL disparaît, la nouvelle répond", () => {
-    cy.visit("/admin");
-    cy.get(`[data-cy=admin-book-row-${SLUG}]`).click();
-    cy.get("[data-cy=book-form-slug]").clear().type(SLUG_RENOMME);
-    cy.get("[data-cy=book-form-submit]").click();
-    cy.get("[data-cy=book-form-success]").should("be.visible");
-
-    cy.request({ url: `/fr/projets/${SLUG}`, failOnStatusCode: false })
-      .its("status")
-      .should("eq", 404);
-    cy.request(`/fr/projets/${SLUG_RENOMME}`).its("status").should("eq", 200);
-
-    // remise en état pour la suite de la chaîne
-    cy.visit("/admin");
-    cy.get(`[data-cy=admin-book-row-${SLUG_RENOMME}]`).click();
-    cy.get("[data-cy=book-form-slug]").clear().type(SLUG);
-    cy.get("[data-cy=book-form-submit]").click();
-    cy.get("[data-cy=book-form-success]").should("be.visible");
-    cy.request(`/fr/projets/${SLUG}`).its("status").should("eq", 200);
   });
 
   it("remplace le 4e de couverture depuis la page d'édition", () => {
