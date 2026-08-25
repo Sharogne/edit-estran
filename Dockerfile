@@ -41,6 +41,15 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
 
+# next.config.ts ET le graphe qu'il importe. `next start` RELIT la configuration
+# au démarrage : sans ces fichiers, Next tourne sur ses valeurs par défaut sans
+# rien signaler — dont une limite de corps de requête à 1 Mo, qui fait échouer en
+# 413 tout envoi d'image un peu lourde. Le symptôme est un écran d'erreur Next
+# côté admin et une seule ligne dans les journaux du conteneur.
+# Si next.config.ts venait à importer autre chose, ce COPY doit suivre.
+COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/src/config ./src/config
+
 # Le contenu vit sur un volume, hors de l'image : c'est la seule chose à
 # sauvegarder et elle doit survivre à chaque reconstruction.
 RUN mkdir -p /data && chown nextjs:nodejs /data

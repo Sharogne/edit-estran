@@ -114,6 +114,19 @@ verifier /fr 200
 verifier /fr/projets 200
 verifier /admin/login 200
 
+# La configuration est-elle VRAIMENT chargée ? Une page qui répond 200 ne le dit
+# pas : `next start` démarre très bien sans next.config.ts, sur ses valeurs par
+# défaut. On interroge donc le chargeur de config de Next lui-même, dans le
+# conteneur. Sans ça, une limite d'envoi retombée à 1 Mo ne se voit qu'au premier
+# upload raté, en production comme ici.
+LIMITE="$(docker exec edit-staging node -e 'require("next/dist/server/config").default("phase-production-server", process.cwd()).then(c => console.log((c.experimental && c.experimental.serverActions && c.experimental.serverActions.bodySizeLimit) || "ABSENTE")).catch(() => console.log("ABSENTE"))' 2>/dev/null || echo ABSENTE)"
+if [[ "$LIMITE" == "ABSENTE" ]]; then
+  echo "✗ next.config.ts n'est pas chargé par le conteneur : Next tourne sur ses" >&2
+  echo "  valeurs par défaut (limite d'envoi à 1 Mo). Vérifiez les COPY du Dockerfile." >&2
+  exit 1
+fi
+echo "  ✓ next.config.ts chargé (bodySizeLimit : $LIMITE)"
+
 # LE contrôle qui justifie ce script : un staging en ligne DOIT être fermé aux
 # moteurs. Si ce test tombe, le site est exposé à l'indexation.
 ROBOTS="$(curl -s "http://127.0.0.1:$PORT/robots.txt")"
