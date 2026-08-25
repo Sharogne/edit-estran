@@ -5,12 +5,41 @@ describe("Fiche projet", () => {
     cy.get("[data-cy=project-synopsis]").should("contain", "botaniste");
     cy.get("[data-cy=project-published]").should("be.visible");
     cy.get("[data-cy=project-cover]").should("be.visible");
-    // le seed crée 3 pages de preview pour ce livre
-    cy.get("[data-cy=project-previews]").within(() => {
-      cy.get("[data-cy=project-preview-page]").should("have.length", 3);
-    });
     cy.get("[data-cy=project-back]").click();
     cy.url().should("include", "/fr/projets");
+  });
+
+  it("retourne la couverture pour montrer le 4e de couverture", () => {
+    cy.visit("/fr/projets/les-jardins-suspendus");
+    // le seed donne un 4e de couverture à ce livre
+    cy.get("[data-cy=project-cover-card]").should("have.attr", "data-face", "front");
+    cy.get("[data-cy=project-cover-flip]").click();
+
+    cy.get("[data-cy=project-cover-card]").should("have.attr", "data-face", "back");
+    cy.get("[data-cy=project-back-cover]").should("exist");
+
+    // et on revient au recto
+    cy.get("[data-cy=project-cover-flip]").click();
+    cy.get("[data-cy=project-cover-card]").should("have.attr", "data-face", "front");
+  });
+
+  it("expose un contrôle de retournement accessible", () => {
+    cy.visit("/fr/projets/les-jardins-suspendus");
+    cy.get("[data-cy=project-cover-flip]")
+      // un vrai <button> : focusable et activable au clavier par construction
+      .should("match", "button")
+      .and("have.attr", "aria-pressed", "false")
+      .focus()
+      .should("have.focus");
+
+    // la face tournée vers l'arrière reste dans le DOM pour l'animation, mais
+    // ne doit pas être annoncée par un lecteur d'écran
+    cy.get("[data-cy=project-cover]").parent().should("have.attr", "aria-hidden", "false");
+    cy.get("[data-cy=project-back-cover]").parent().should("have.attr", "aria-hidden", "true");
+
+    cy.get("[data-cy=project-cover-flip]").click().should("have.attr", "aria-pressed", "true");
+    cy.get("[data-cy=project-cover]").parent().should("have.attr", "aria-hidden", "true");
+    cy.get("[data-cy=project-back-cover]").parent().should("have.attr", "aria-hidden", "false");
   });
 
   it("affiche la traduction anglaise", () => {

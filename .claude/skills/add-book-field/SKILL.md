@@ -1,56 +1,63 @@
 ---
 name: add-book-field
-description: Procédure complète pour ajouter un champ aux livres (ex. auteur, ISBN, date de parution, prix, citation). À utiliser dès que l'éditeur veut un nouveau paramètre sur les fiches livres — c'est LA procédure d'évolutivité du projet, de la base de données jusqu'aux tests.
+description: Procédure complète pour ajouter un champ aux livres (ex. auteur, ISBN, date de parution, prix, citation). À utiliser dès que l'éditeur veut un nouveau paramètre sur les fiches livres — c'est LA procédure d'évolutivité du projet, du type de données jusqu'aux tests.
 ---
 
 # Ajouter un champ aux livres
 
-Procédure de bout en bout (~10 fichiers, tous listés). Ne JAMAIS sauter les étapes seeds et e2e.
+Procédure de bout en bout. Sans base de données, il n'y a **ni schéma ni migration** : le point
+de départ est le type TypeScript. Ne JAMAIS sauter les étapes seeds et e2e.
 
 ## 0. Décider de l'emplacement du champ
 
 - **Texte lu par les visiteurs et différent selon la langue** (sous-titre, citation, note
-  d'intention…) → `BookTranslation` (une valeur FR + une valeur EN).
+  d'intention…) → `StoredTranslation` (une valeur par locale).
 - **Donnée indépendante de la langue** (ISBN, date de parution, prix, nombre de pages, auteur…)
-  → `Book`.
-- Donnée ponctuelle/expérimentale qu'on ne veut pas encore figer → champ JSON `extras` de
-  `Book` (pas de migration, mais pas de garantie de type — à régulariser si ça devient pérenne).
+  → `StoredBook`.
 
-## 1. Schéma — `prisma/schema.prisma`
+## 1. Type — `src/lib/content-types.ts`
 
-Ajouter la colonne (TOUJOURS optionnelle `?` ou avec `@default` : les livres existants doivent
-rester valides). SQLite : pas d'enum → `String` + contrainte Zod.
+Ajouter le champ. Le rendre **optionnel (`?`) ou nullable** : les `content.json` déjà écrits ne
+le contiennent pas et doivent rester valides.
 
-```prisma
-// ex. dans Book :        author  String?
-// ex. dans BookTranslation : subtitle String?
+```ts
+// ex. dans StoredBook :        author: string | null;
+// ex. dans StoredTranslation : subtitle?: string;
 ```
 
-## 2. Migration
+Il n'y a pas de migration à jouer : les entrées existantes rendront `undefined` pour ce champ,
+d'où l'obligation du `?`/`| null` et d'un fallback à la lecture. Si le champ doit absolument
+avoir une valeur partout, écrire un petit script de reprise qui lit, complète et réécrit le
+fichier via `mutateContent`.
 
-```bash
-npm run db:migrate -- --name add_book_<champ>
-```
+## 2. Lecture — `src/lib/books.ts`
 
-Vérifier que le dossier `prisma/migrations/<timestamp>_add_book_<champ>/` est créé. Ne jamais
-modifier une migration déjà appliquée/committée.
+Ajouter le champ au type de sortie concerné (`PublicBook` pour les listes, `PublicBookDetail`
+pour la fiche, `AdminBook` pour le back office) et le mapper dans la ou les fonctions qui le
+construisent. Les pages ne connaissent que ces types.
 
 ## 3. Validation — `src/lib/validation/book.ts`
 
-Ajouter le champ au(x) schéma(s) Zod (`bookFormSchema` : partie commune ou partie par-locale).
-C'est ici que vivent les contraintes réelles (longueur, format, plage de dates…).
+Ajouter le champ à `bookFormSchema` (partie commune ou `localeContentSchema`), et à
+`bookFormDataToObject` pour qu'il soit lu du `FormData`. C'est ici que vivent les contraintes
+réelles (longueur, format, plage de dates…).
 
 ## 4. Server actions — `src/app/admin/(protected)/livres/actions.ts`
 
-Les actions `createBook`/`updateBook` mappent le résultat Zod vers Prisma : ajouter le champ au
-mapping (données `Book`) ou au bloc translations (données `BookTranslation`).
+`createBook` (objet poussé dans `draft.books`) et `updateBook` (`Object.assign`) : ajouter le
+champ au mapping. **Attention à l'ordre des clés** dans ces littéraux — un spread placé après
+une clé explicite l'écrase (bug déjà vécu avec `status`).
 
 ## 5. Formulaire admin — `src/components/admin/BookForm.tsx`
 
 Ajouter l'input avec :
 - un `<label>` français explicite,
-- `defaultValue` branché sur le livre existant (mode édition),
+- `defaultValue` branché sur `BookFormDefaults` (mode édition) — penser à étendre ce type et
+  `emptyDefaults`, ainsi que la construction des `defaults` dans `livres/[id]/page.tsx`,
 - `data-cy="book-form-<champ>"` (suffixe `-fr` / `-en` si champ traduit, dans chaque volet).
+
+Pour un champ **image**, réutiliser le composant local `ImageField` et ajouter une variante dans
+`src/lib/images.ts` plutôt que d'inventer un encodage — et mesurer l'impact sur le poids du JSON.
 
 ## 6. Affichage public
 
@@ -60,10 +67,11 @@ Ajouter l'input avec :
   `messages/fr.json` ET `messages/en.json` (section `project`).
 - Poser `data-cy="project-<champ>"` sur l'élément affiché.
 
-## 7. Seeds
+## 7. Seeds — `scripts/lib/seed-books.ts`
 
-- `prisma/seed.ts` : valeurs réalistes pour les livres de démo.
-- `scripts/seed-e2e.ts` : valeurs FIXES (déterministes) pour les livres de test.
+Ajouter le champ à `BookSeedDef`, le mapper dans `buildStoredBook`, et renseigner des valeurs
+réalistes pour les 4 livres de `demoBooks`. Les **trois premiers** servent aussi au seed e2e :
+leurs valeurs doivent rester FIXES et déterministes.
 
 ## 8. Tests e2e
 
@@ -74,7 +82,7 @@ Ajouter l'input avec :
 ## 9. Vérification finale
 
 ```bash
-npm run lint && npm run db:seed && npm run e2e
+npm run lint && npm run seed && npm run e2e
 ```
 
 Suite verte = champ livré. Sinon, corriger avant tout commit.

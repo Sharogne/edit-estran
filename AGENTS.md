@@ -1,65 +1,62 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
-
 # Maison d'édition — Site vitrine + Back office
 
 Site vitrine bilingue (**FR** par défaut, **EN**) pour une maison d'édition de livres, avec back
 office réservé à un éditeur unique (admin). Hébergement : **VPS OVH** (Node + PM2 + Nginx).
 
+> **Variante sans base de données.** Cette branche remplace Prisma + SQLite + le dossier d'uploads
+> par **un seul fichier JSON** (`content.json`) qui contient tout : textes ET images (encodées en
+> data URI). Conséquences : plus de migrations, une seule chose à sauvegarder, et un déploiement
+> qui se résume à un redémarrage. La branche `main` garde la version avec base de données.
+
 ## Stack
 
 | Brique | Choix | Notes |
 | --- | --- | --- |
-| Framework | Next.js 16 (App Router) + TypeScript strict | `output: "standalone"` pour le déploiement |
+| Framework | Next.js 16 (App Router) + TypeScript strict | Serveur Node classique (`next start` derrière PM2) |
 | Styles | Tailwind CSS v4 | Tokens dans `src/app/globals.css` via `@theme` — JAMAIS de valeurs en dur |
-| Base de données | Prisma 6 + SQLite | Fichier `data/app.db` (dev) — backup = copie de fichier |
+| Données | Un fichier JSON (`content.json`) | **Aucune base de données.** Backup = copie d'un fichier |
 | i18n | next-intl v4 | Segment `[locale]`, messages dans `messages/{fr,en}.json` |
-| Auth | iron-session + bcryptjs | Cookie chiffré, un seul compte admin (table `AdminUser`) |
-| Images | sharp | Variantes WebP générées à l'upload, stockées dans `UPLOADS_DIR` |
+| Auth | iron-session + bcryptjs | Cookie chiffré, un seul compte admin (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH_B64` dans `.env`) |
+| Images | sharp | Recompressées en WebP puis **inlinées en data URI** dans le JSON — aucun dossier d'uploads |
 | Validation | Zod v4 | Schémas partagés dans `src/lib/validation/` |
-| Tests e2e | Cypress | Sélecteurs `data-cy` uniquement, DB de test dédiée (`.env.test`) |
+| Tests e2e | Cypress | Sélecteurs `data-cy` uniquement, fichier de contenu de test dédié (`.env.test`) |
 
 ## Carte d'architecture
 
 ```
 messages/{fr,en}.json          Chaînes UI du site public (TOUT texte public passe par là)
-prisma/schema.prisma           Modèles : Book, BookTranslation, BookPreviewPage, AdminUser
-prisma/seed.ts                 Seed dev : admin (.env) + livres de démo
-scripts/seed-e2e.ts            Seed déterministe pour Cypress (ne pas rendre aléatoire)
+data/content.json              TOUTES les données du site (textes + images) — hors dépôt
+scripts/seed-content.ts        Écrit content.json (dev : catalogue démo ; --e2e : jeu déterministe)
+scripts/hash-password.mjs      Génère la ligne ADMIN_PASSWORD_HASH_B64 à coller dans .env
 src/
   config/site.ts               Identité du site (nom, baseline, contact) — branding centralisé
   i18n/                        routing.ts (locales), request.ts, navigation.ts (Link locale-aware)
-  proxy.ts                     Middleware next-intl — matcher EXCLUT /admin /api /uploads
+  proxy.ts                     Middleware next-intl — matcher EXCLUT /admin /api /og
   lib/
-    db.ts                      Singleton PrismaClient
+    content-types.ts           Forme de content.json (StoredBook, ContentFile)
+    store.ts                   SEUL module autorisé à toucher content.json (cache + écriture atomique)
     books.ts                   Toutes les requêtes livres (public + admin)
+    images.ts                  SEUL module autorisé à encoder/décoder les images (sharp → data URI)
     session.ts                 iron-session : getSession(), requireAdmin()
-    uploads.ts                 SEUL module autorisé à toucher le filesystem des uploads
     validation/book.ts         Schémas Zod des formulaires livre
   components/
     ui/                        Primitives du design system (Button, Card, …)
-    site/                      Composants du site public (Header, Footer, BookCard, …)
-    admin/                     Composants du back office (BookForm, PreviewPagesManager, …)
+    site/                      Composants du site public (Header, Footer, BookCard, BookCoverFlip…)
+    admin/                     Composants du back office (BookForm, StatusBadge, …)
   app/
     [locale]/                  SITE PUBLIC (html/body ici — layout racine multiple)
       page.tsx                 Accueil
       projets/page.tsx         Liste des projets publiés
-      projets/[slug]/page.tsx  Détail d'un livre (cover, synopsis, previews)
+      projets/[slug]/page.tsx  Détail d'un livre (couverture retournable recto/verso, synopsis)
     admin/                     BACK OFFICE (hors locale, UI en français, html/body propre)
       login/                   Page + actions login/logout (hors groupe protégé)
       (protected)/             layout.tsx = garde requireAdmin pour tout le groupe
         page.tsx               Dashboard : liste des livres
-        livres/actions.ts      TOUTES les server actions livres (CRUD + uploads)
+        livres/actions.ts      TOUTES les server actions livres (CRUD + images)
         livres/nouveau/        Création
-        livres/[id]/           Édition (previews, suppression)
-    uploads/[...path]/route.ts Sert les fichiers de UPLOADS_DIR (Nginx prend le relais en prod)
+        livres/[id]/           Édition, suppression
+    og/[slug]/route.ts         Décode la couverture pour les crawlers (partages sociaux)
     sitemap.ts, robots.ts      SEO
-cypress/e2e/{public,admin}/    Specs e2e
-demo/overlay/                 Surcouche de la démo statique GitHub Pages (voir demo/README.md)
-.github/workflows/pages.yml   Déploiement automatique de la démo sur chaque push `main`
 ```
 
 ## Commandes
@@ -70,15 +67,11 @@ npm run build        # Build de production
 npm run lint         # ESLint
 npm run format       # Prettier --write
 
-npm run db:migrate   # Crée + applique une migration (dev)        [skill: db-migrate]
-npm run db:deploy    # Applique les migrations (prod, sans prompt)
-npm run db:seed      # Seed dev (admin + livres de démo)
-npm run db:studio    # Inspection visuelle de la base
+npm run seed         # (Ré)écrit data/content.json avec le catalogue de démonstration
+node scripts/hash-password.mjs "<mot-de-passe>"   # Ligne ADMIN_PASSWORD_HASH_B64 pour .env
 
 npm run e2e          # Suite Cypress complète headless (seed + build + run)  [skill: run-e2e]
 npm run e2e:open     # Cypress interactif contre le serveur de dev
-
-npm run demo:build   # Build de la démo statique GitHub Pages dans out/     [skill: static-demo]
 ```
 
 ## Conventions — NON NÉGOCIABLES
@@ -93,13 +86,28 @@ npm run demo:build   # Build de la démo statique GitHub Pages dans out/     [sk
 - Après toute mutation qui touche au contenu public : `revalidatePath` sur les pages concernées
   (`/[locale]`, `/[locale]/projets`, `/[locale]/projets/[slug]`).
 
+### Données
+- `content.json` ne se lit et ne s'écrit QUE via `src/lib/store.ts`. Les pages et composants ne
+  connaissent que `src/lib/books.ts` — ils ne touchent jamais au store directement.
+- Toute écriture passe par `mutateContent()` : les mutations sont sérialisées et le fichier est
+  remplacé atomiquement (`.tmp` puis `rename`). Ne jamais muter l'objet rendu par `readContent()`,
+  il est partagé.
+- Le store garde le fichier en mémoire → **un seul process** (`instances: 1` côté PM2). Un mode
+  cluster ferait diverger les caches.
+- Le fichier vit HORS du répertoire de build (`CONTENT_FILE`), pour survivre aux déploiements.
+- Les pages publiques qui lisent le contenu sont en `export const dynamic = "force-dynamic"`.
+  Le rendu ne coûte qu'une lecture mémoire (~10 ms), alors qu'un pré-rendu figé au build
+  reservirait le catalogue tel qu'il était au build après tout redémarrage non précédé d'un
+  rebuild (crash, reboot, `pm2 restart`). `revalidatePath` reste obligatoire après une
+  mutation : il purge le router cache côté client.
+
 ### i18n
 - Tout texte du site public passe par `messages/fr.json` **et** `messages/en.json` — une clé
   ajoutée dans l'un DOIT exister dans l'autre. Jamais de texte public en dur.
 - Le back office (`/admin`) est en français : texte en dur autorisé là-bas uniquement.
 - Navigation publique : importer `Link`, `redirect`, `usePathname` depuis `@/i18n/navigation`,
   jamais depuis `next/link` ou `next/navigation` (sauf dans `/admin`).
-- Contenu en base : champs traduits dans `BookTranslation` (une ligne par locale).
+- Contenu en base : champs traduits dans `StoredBook.translations`, une entrée par locale.
 
 ### Design
 - Couleurs, typo, rayons, espacements : **uniquement** via les tokens `@theme` de
@@ -113,12 +121,22 @@ npm run demo:build   # Build de la démo statique GitHub Pages dans out/     [sk
   `data-cy="book-form-title-fr"`). Les specs Cypress ne sélectionnent QUE via `data-cy`.
 - Toute feature livrée = spec e2e mise à jour ou créée. La suite `npm run e2e` doit être verte
   avant de considérer un travail terminé.
+- Ce qui touche au contenu stocké s'asserte sur `content.json`, pas seulement sur le rendu :
+  tâches `storedBook` / `storedSlugs` (`cypress.config.ts`), exposées via `cy.storedBook()`.
+- Les specs admin qui créent des livres utilisent des slugs préfixés `cy-` et se nettoient dans
+  un `before`/`after` (`cy.removeBookIfPresent`) — un échec ne doit pas contaminer le run suivant.
 
 ### Sécurité
-- Jamais de secret en dur (tout passe par `.env`, voir `.env.example`).
-- Uploads : type MIME et taille validés (Zod) ; traitement via `src/lib/uploads.ts` uniquement ;
-  noms de fichiers générés (cuid), jamais le nom client ; chemins résolus et confinés sous
-  `UPLOADS_DIR` (protection path traversal) dans la route `/uploads`.
+- Jamais de secret en dur (tout passe par `.env`, voir `.env.example`). Le mot de passe admin
+  n'existe QUE sous forme de hash bcrypt, base64-encodé (`ADMIN_PASSWORD_HASH_B64`) — jamais
+  en clair, jamais commité.
+- Le base64 n'est pas cosmétique : un hash bcrypt est truffé de `$`, et les chargeurs d'env
+  expandent `$nom`. `@next/env` ré-expand même ce que `dotenv-cli` a déjà résolu, ce qui
+  tronque un hash brut en silence et fait échouer le login sans message. Toujours coller la
+  sortie de `scripts/hash-password.mjs`, jamais un hash à la main.
+- Images : type MIME et taille validés par Zod (10 Mo max) ; encodage via `src/lib/images.ts`
+  uniquement. Aucun chemin fourni par l'utilisateur n'atteint le filesystem — le seul fichier
+  écrit est `content.json`.
 - `robots.txt` exclut `/admin`.
 
 ## Agents & skills du projet
@@ -131,9 +149,7 @@ npm run demo:build   # Build de la démo statique GitHub Pages dans out/     [sk
 | Relire des changements avant commit | agent `code-reviewer` |
 | Ajouter un champ aux livres (ex. auteur, ISBN, date de parution) | skill `add-book-field` |
 | Ajouter une page publique (ex. contact, à-propos) | skill `new-public-page` |
-| Toucher au schéma / migrer la base | skill `db-migrate` |
 | Déployer ou configurer le VPS OVH | skill `deploy-ovh` |
-| Mettre à jour la démo statique GitHub Pages | skill `static-demo` |
 
 **Règle d'évolution des piliers** : quand une itération révèle une procédure récurrente non
 couverte, créer le skill correspondant (même format) ; quand un skill ment (commande/chemin

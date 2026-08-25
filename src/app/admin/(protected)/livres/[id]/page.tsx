@@ -5,7 +5,6 @@ import { getBookForAdmin } from "@/lib/books";
 import { updateBook } from "../actions";
 import { Container } from "@/components/ui/Container";
 import { BookForm, type BookFormDefaults } from "@/components/admin/BookForm";
-import { PreviewPagesManager } from "@/components/admin/PreviewPagesManager";
 import { DeleteBookButton } from "@/components/admin/DeleteBookButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 
@@ -16,8 +15,8 @@ export default async function EditBookPage({ params }: PageProps<"/admin/livres/
   const book = await getBookForAdmin(id);
   if (!book) notFound();
 
-  const fr = book.translations.find((t) => t.locale === "fr");
-  const en = book.translations.find((t) => t.locale === "en");
+  const fr = book.translations.fr;
+  const en = book.translations.en;
 
   const defaults: BookFormDefaults = {
     bookId: book.id,
@@ -25,7 +24,8 @@ export default async function EditBookPage({ params }: PageProps<"/admin/livres/
     status: book.status,
     publishedAt: book.publishedAt ? book.publishedAt.toISOString().slice(0, 10) : "",
     sortOrder: book.sortOrder,
-    coverImage: book.coverImage,
+    coverThumb: book.coverThumb,
+    backCoverImage: book.backCoverImage,
     fr: { title: fr?.title ?? "", synopsis: fr?.synopsis ?? "" },
     en: { title: en?.title ?? "", synopsis: en?.synopsis ?? "" },
   };
@@ -57,8 +57,6 @@ export default async function EditBookPage({ params }: PageProps<"/admin/livres/
         </div>
 
         <BookForm action={updateBook} defaults={defaults} mode="edit" />
-
-        <PreviewPagesManager bookId={book.id} previewPages={book.previewPages} />
 
         <section className="mt-12 border-t border-line pt-8">
           <h2 className="font-display text-xl">Zone dangereuse</h2>

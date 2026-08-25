@@ -6,6 +6,12 @@ import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { BookCard } from "@/components/site/BookCard";
 
+// Rendered per request rather than frozen at build time: the content lives in an
+// in-memory JSON store, so a render costs a lookup and no I/O — while a
+// build-time prerender would resurface the catalogue as it was at build after
+// any restart not preceded by a rebuild (crash, reboot, plain pm2 restart).
+export const dynamic = "force-dynamic";
+
 export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const { locale } = await params;
   setRequestLocale(locale);
@@ -17,7 +23,10 @@ export default async function HomePage({ params }: PageProps<"/[locale]">) {
       {/* Hero */}
       <section className="border-b border-line bg-surface" data-cy="home-hero">
         <Container className="py-20 sm:py-28">
-          <h1 className="font-display max-w-3xl text-4xl leading-tight tracking-tight sm:text-5xl" data-cy="home-title">
+          <h1
+            className="font-display max-w-3xl text-4xl leading-tight tracking-tight sm:text-5xl"
+            data-cy="home-title"
+          >
             {t("heroTitle")}
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-muted">{t("heroText")}</p>

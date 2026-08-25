@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { uploadSrc } from "@/lib/image-src";
 import { useActionState } from "react";
 import type { BookActionState } from "@/app/admin/(protected)/livres/actions";
 import { slugify } from "@/lib/slugify";
@@ -13,7 +12,8 @@ export type BookFormDefaults = {
   status: string;
   publishedAt: string; // "" or "YYYY-MM-DD"
   sortOrder: number;
-  coverImage: string | null;
+  coverThumb: string | null;
+  backCoverImage: string | null;
   fr: { title: string; synopsis: string };
   en: { title: string; synopsis: string };
 };
@@ -23,7 +23,8 @@ const emptyDefaults: BookFormDefaults = {
   status: "draft",
   publishedAt: "",
   sortOrder: 0,
-  coverImage: null,
+  coverThumb: null,
+  backCoverImage: null,
   fr: { title: "", synopsis: "" },
   en: { title: "", synopsis: "" },
 };
@@ -32,6 +33,52 @@ const inputClasses =
   "w-full rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-muted/60 focus:border-ink";
 const labelClasses = "mb-1 block text-sm font-medium";
 const helpClasses = "mt-1 text-xs text-ink-muted";
+const fileClasses = `${inputClasses} file:mr-3 file:rounded-md file:border-0 file:bg-ink file:px-3 file:py-1 file:text-xs file:text-paper`;
+
+/** One file input, with a thumbnail of the image currently stored (if any). */
+function ImageField({
+  name,
+  cy,
+  label,
+  current,
+  currentAlt,
+}: {
+  name: string;
+  cy: string;
+  label: string;
+  current: string | null;
+  currentAlt: string;
+}) {
+  return (
+    <div className="flex items-start gap-4">
+      {current && (
+        <div className="relative h-36 w-24 shrink-0 overflow-hidden rounded-sm bg-surface shadow-book">
+          <Image
+            src={current}
+            alt={currentAlt}
+            fill
+            sizes="96px"
+            className="object-cover"
+            data-cy={`book-form-current-${cy}`}
+          />
+        </div>
+      )}
+      <div className="flex-1">
+        <label htmlFor={name} className={labelClasses}>
+          {label}
+        </label>
+        <input
+          id={name}
+          name={name}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/avif"
+          data-cy={`book-form-${cy}`}
+          className={fileClasses}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function BookForm({
   action,
@@ -195,64 +242,48 @@ export function BookForm({
         </div>
       </fieldset>
 
-      {/* Couverture (+ previews à la création) */}
+      {/* Couverture + 4e de couverture */}
       <fieldset className="space-y-4">
         <legend className="font-display mb-3 text-lg">Images</legend>
-        <div className="flex items-start gap-6">
-          {defaults.coverImage && (
-            <div className="relative h-36 w-24 shrink-0 overflow-hidden rounded-sm bg-surface shadow-book">
-              <Image
-                src={uploadSrc(defaults.coverImage)}
-                alt="Couverture actuelle"
-                fill
-                sizes="96px"
-                className="object-cover"
-                data-cy="book-form-current-cover"
-              />
-            </div>
-          )}
-          <div className="flex-1">
-            <label htmlFor="cover" className={labelClasses}>
-              {defaults.coverImage ? "Remplacer la couverture" : "Image de couverture"}
-            </label>
-            <input
-              id="cover"
-              name="cover"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              data-cy="book-form-cover"
-              className={`${inputClasses} file:mr-3 file:rounded-md file:border-0 file:bg-ink file:px-3 file:py-1 file:text-xs file:text-paper`}
-            />
-            <p className={helpClasses}>JPEG, PNG, WebP ou AVIF — 10 Mo max, convertie en WebP</p>
-          </div>
+        <div className="grid gap-6 sm:grid-cols-2">
+          <ImageField
+            name="cover"
+            cy="cover"
+            label={defaults.coverThumb ? "Remplacer la couverture" : "Image de couverture"}
+            current={defaults.coverThumb}
+            currentAlt="Couverture actuelle"
+          />
+          <ImageField
+            name="backCover"
+            cy="back-cover"
+            label={
+              defaults.backCoverImage ? "Remplacer le 4e de couverture" : "4e de couverture (verso)"
+            }
+            current={defaults.backCoverImage}
+            currentAlt="4e de couverture actuel"
+          />
         </div>
-
-        {mode === "create" && (
-          <div>
-            <label htmlFor="previews" className={labelClasses}>
-              Pages de preview (plusieurs fichiers possibles)
-            </label>
-            <input
-              id="previews"
-              name="previews"
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              data-cy="book-form-previews"
-              className={`${inputClasses} file:mr-3 file:rounded-md file:border-0 file:bg-ink file:px-3 file:py-1 file:text-xs file:text-paper`}
-            />
-            <p className={helpClasses}>L&apos;ordre de sélection devient l&apos;ordre d&apos;affichage (modifiable ensuite)</p>
-          </div>
-        )}
+        <p className={helpClasses}>
+          JPEG, PNG, WebP ou AVIF — 10 Mo max. Les images sont recompressées en WebP et stockées
+          directement dans la page : inutile de les optimiser avant.
+        </p>
       </fieldset>
 
       {state.error && (
-        <p className="rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-accent-deep" role="alert" data-cy="book-form-error">
+        <p
+          className="rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-accent-deep"
+          role="alert"
+          data-cy="book-form-error"
+        >
           {state.error}
         </p>
       )}
       {state.success && (
-        <p className="rounded-md border border-line bg-surface px-4 py-3 text-sm" role="status" data-cy="book-form-success">
+        <p
+          className="rounded-md border border-line bg-surface px-4 py-3 text-sm"
+          role="status"
+          data-cy="book-form-success"
+        >
           Modifications enregistrées.
         </p>
       )}

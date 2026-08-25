@@ -14,7 +14,7 @@ l'orchestration exacte, et `cypress/support/` pour les commandes existantes (`cy
 - Sélecteurs : **uniquement `data-cy`** (`cy.get('[data-cy=...]')`). Jamais de classe CSS, de
   texte localisé fragile ou de structure DOM — le design doit pouvoir changer sans casser les
   tests. Si un élément n'a pas de `data-cy`, ajoute-le dans le composant (kebab-case).
-- Déterminisme : les specs s'appuient sur le seed `scripts/seed-e2e.ts` (données fixes,
+- Déterminisme : les specs s'appuient sur le seed `scripts/seed-content.ts --e2e` (données fixes,
   jamais aléatoires). Une spec qui crée des données les nettoie ou utilise des identifiants
   dédiés qui ne collisionnent pas avec le seed.
 - Pas de `cy.wait(ms)` arbitraire : attendre un élément ou une réponse réseau.
@@ -26,18 +26,25 @@ l'orchestration exacte, et `cypress/support/` pour les commandes existantes (`cy
 ## Organisation
 
 ```
-cypress/e2e/public/   home, projects (liste), project-detail (+404)
-cypress/e2e/admin/    auth (login/logout/protection), book-crud (cycle de vie complet)
-cypress/fixtures/     images de test pour les uploads (cover.jpg, preview-1.jpg…)
-cypress/support/      commands.ts (cy.login), e2e.ts
+cypress/e2e/public/   home, projects, project-detail (+404, a11y), i18n (parité fr/en), seo
+cypress/e2e/admin/    auth, book-crud (cycle complet), book-validation (règles), content-store
+cypress/fixtures/     images de test (cover-upload.jpg, back-cover-upload.jpg)
+cypress/support/      commands.ts (cy.login, cy.removeBookIfPresent, cy.storedBook), e2e.ts
 ```
+
+Sans base de données, une page correcte ne prouve pas une écriture correcte : `cy.storedBook(slug)`
+et les tâches `storedSlugs` / `messageKeys` (`cypress.config.ts`) lisent directement le fichier de
+contenu et les messages. À privilégier dès qu'un test porte sur ce qui est persisté.
+
+Les specs qui créent des livres se nettoient via `cy.removeBookIfPresent` dans `before`/`after`,
+et utilisent des slugs `cy-` : les specs publiques les excluent de leurs comptages.
 
 ## Exécution & diagnostic
 
-- Suite complète (fidèle CI) : `npm run e2e` — reseed la DB de test, build de prod, run headless.
+- Suite complète (fidèle CI) : `npm run e2e` — réécrit le contenu de test, build de prod, run headless.
 - Itération sur une spec : `npm run e2e:open` (serveur de dev + Cypress interactif).
 - Une seule spec en headless : `npm run e2e:seed && npm run e2e:build` puis
-  `npx start-server-and-test e2e:start http://localhost:3000 "npx cypress run --spec <chemin>"`.
+  `npx start-server-and-test e2e:start http://localhost:3000 "node scripts/run-cypress.cjs run --spec <chemin>"`.
 - Échec → regarde dans l'ordre : (1) screenshot dans `cypress/screenshots/`, (2) le message
   d'assertion, (3) le seed (la donnée attendue existe-t-elle ?), (4) le `data-cy` (renommé ?),
   (5) le serveur (port 3000 occupé → tuer les process node résiduels).

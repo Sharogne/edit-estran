@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { uploadSrc } from "@/lib/image-src";
 import { getAllBooksForAdmin } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
@@ -39,9 +38,9 @@ export default async function AdminDashboardPage() {
                   className="flex items-center gap-5 py-4 transition-colors hover:bg-surface"
                 >
                   <div className="relative h-16 w-11 shrink-0 overflow-hidden rounded-sm bg-surface shadow-book">
-                    {book.coverImage && (
+                    {book.coverThumb && (
                       <Image
-                        src={uploadSrc(book.coverImage)}
+                        src={book.coverThumb}
                         alt=""
                         fill
                         sizes="44px"
@@ -51,9 +50,7 @@ export default async function AdminDashboardPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{book.title}</p>
-                    <p className="truncate text-sm text-ink-muted">
-                      /{book.slug} — {book.previewCount} page(s) de preview
-                    </p>
+                    <p className="truncate text-sm text-ink-muted">/{book.slug}</p>
                   </div>
                   <div className="hidden text-sm text-ink-muted sm:block">
                     Modifié le {dateFormat.format(book.updatedAt)}

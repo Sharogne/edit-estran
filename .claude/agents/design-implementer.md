@@ -20,7 +20,7 @@ AUTORISÉ :
 - Classes Tailwind dans les pages (`src/app/`), `src/styles/fonts.ts` (choix de fontes).
 
 INTERDIT — si la demande l'exige, ARRÊTE-TOI et dis-le :
-- Tout fichier de `src/lib/`, `prisma/`, `actions.ts`, `proxy.ts`, configs, scripts.
+- Tout fichier de `src/lib/`, `actions.ts`, `proxy.ts`, configs, scripts.
 - Supprimer ou renommer un attribut `data-cy` (les tests e2e reposent dessus).
 - Modifier une clé de message i18n (tu peux en AJOUTER une si un texte décoratif l'exige,
   toujours dans fr.json ET en.json).

@@ -5,6 +5,12 @@ import { getPublishedBooks } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
 import { BookCard } from "@/components/site/BookCard";
 
+// Rendered per request rather than frozen at build time: the content lives in an
+// in-memory JSON store, so a render costs a lookup and no I/O — while a
+// build-time prerender would resurface the catalogue as it was at build after
+// any restart not preceded by a rebuild (crash, reboot, plain pm2 restart).
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({
   params,
 }: PageProps<"/[locale]/projets">): Promise<Metadata> {
@@ -39,7 +45,10 @@ export default async function ProjectsPage({ params }: PageProps<"/[locale]/proj
             {t("empty")}
           </p>
         ) : (
-          <div className="mt-12 grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3" data-cy="projects-grid">
+          <div
+            className="mt-12 grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3"
+            data-cy="projects-grid"
+          >
             {books.map((book) => (
               <BookCard key={book.id} book={book} locale={locale} />
             ))}
