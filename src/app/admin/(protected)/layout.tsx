@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/session";
-import { siteConfig } from "@/config/site";
+import { environmentLabel, isProduction, siteConfig } from "@/config/site";
 import { Container } from "@/components/ui/Container";
 import { logout } from "@/app/admin/login/actions";
 import Link from "next/link";
@@ -9,6 +9,19 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
 
   return (
     <>
+      {/*
+        Confondre staging et production, c'est publier au mauvais endroit ou
+        supprimer le mauvais livre. Le bandeau ne s'affiche qu'en dehors de la
+        production, et il est délibérément voyant.
+      */}
+      {!isProduction() && (
+        <div
+          className="bg-accent px-4 py-2 text-center text-sm font-medium text-paper"
+          data-cy="admin-env-banner"
+        >
+          Environnement de test ({environmentLabel()}) — ce n&apos;est pas le site public.
+        </div>
+      )}
       <header className="border-b border-line bg-surface">
         <Container className="flex items-center justify-between py-4">
           <div className="flex items-center gap-6">

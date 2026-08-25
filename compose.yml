@@ -1,0 +1,32 @@
+# Staging auto-hébergé (ThinkPad). Exposition via Tailscale Funnel côté hôte :
+# aucun port n'est publié sur le réseau, seul le loopback écoute.
+services:
+  edit:
+    build:
+      context: .
+      args:
+        # Doit correspondre à l'URL Funnel : elle est figée dans le bundle client.
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    image: edit-staging
+    container_name: edit-staging
+    restart: unless-stopped
+    # 127.0.0.1 uniquement : c'est Tailscale qui décide de ce qui sort.
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      CONTENT_FILE: /data/content.json
+      SITE_ENV: staging
+      SESSION_SECRET: ${SESSION_SECRET}
+      SESSION_COOKIE_SECURE: "true"
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD_HASH_B64: ${ADMIN_PASSWORD_HASH_B64}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    volumes:
+      - edit-content:/data
+    # Un seul conteneur, jamais de réplique : le store garde content.json en
+    # mémoire et sérialise les écritures dans le process.
+    deploy:
+      replicas: 1
+
+volumes:
+  edit-content:
