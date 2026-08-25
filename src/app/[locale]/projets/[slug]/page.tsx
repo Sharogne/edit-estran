@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { getPublishedBookBySlug } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
+import { Button } from "@/components/ui/Button";
 import { BookCoverFlip } from "@/components/site/BookCoverFlip";
 
 // Rendered per request rather than frozen at build time: the content lives in an
@@ -86,6 +87,27 @@ export default async function ProjectPage({ params }: PageProps<"/[locale]/proje
             <div className="mt-8 leading-relaxed whitespace-pre-line" data-cy="project-synopsis">
               {book.synopsis}
             </div>
+
+            {/*
+              Lien marchand saisi par l'éditeur. rel : noopener/noreferrer parce
+              qu'il s'ouvre dans un onglet, nofollow parce que c'est un lien
+              commercial et non une recommandation. Le protocole est contraint à
+              http(s) à la validation — un href ne doit jamais pouvoir porter
+              javascript:.
+            */}
+            {book.purchaseUrl && (
+              <div className="mt-10">
+                <Button
+                  as="a"
+                  href={book.purchaseUrl}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  data-cy="project-buy"
+                >
+                  {t("buy")} ↗
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </Container>

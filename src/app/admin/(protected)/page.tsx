@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import { getAllBooksForAdmin } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
-import { StatusBadge } from "@/components/admin/StatusBadge";
+import { BookList } from "@/components/admin/BookList";
 
 export const metadata: Metadata = { title: "Administration — Livres" };
 
 export default async function AdminDashboardPage() {
   const books = await getAllBooksForAdmin();
-  const dateFormat = new Intl.DateTimeFormat("fr", { dateStyle: "medium" });
 
   return (
     <main>
@@ -29,37 +27,7 @@ export default async function AdminDashboardPage() {
             Aucun livre pour l&apos;instant. Créez le premier !
           </p>
         ) : (
-          <ul className="mt-8 divide-y divide-line border-y border-line" data-cy="admin-book-list">
-            {books.map((book) => (
-              <li key={book.id}>
-                <Link
-                  href={`/admin/livres/${book.id}`}
-                  data-cy={`admin-book-row-${book.slug}`}
-                  className="flex items-center gap-5 py-4 transition-colors hover:bg-surface"
-                >
-                  <div className="relative h-16 w-11 shrink-0 overflow-hidden rounded-sm bg-surface shadow-book">
-                    {book.coverThumb && (
-                      <Image
-                        src={book.coverThumb}
-                        alt=""
-                        fill
-                        sizes="44px"
-                        className="object-cover"
-                      />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{book.title}</p>
-                    <p className="truncate text-sm text-ink-muted">/{book.slug}</p>
-                  </div>
-                  <div className="hidden text-sm text-ink-muted sm:block">
-                    Modifié le {dateFormat.format(book.updatedAt)}
-                  </div>
-                  <StatusBadge status={book.status} />
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <BookList books={books} />
         )}
       </Container>
     </main>

@@ -4,11 +4,7 @@ import { Container } from "@/components/ui/Container";
 import { logout } from "@/app/admin/login/actions";
 import Link from "next/link";
 
-export default async function ProtectedAdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function ProtectedAdminLayout({ children }: { children: React.ReactNode }) {
   await requireAdmin();
 
   return (

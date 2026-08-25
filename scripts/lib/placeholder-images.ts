@@ -1,3 +1,5 @@
+import sharp from "sharp";
+
 // Deterministic placeholder artwork for the seeds (dev + e2e).
 // Pure geometric SVG (no <text>) so rendering never depends on system fonts,
 // which keeps output identical on Windows (dev) and Linux (prod/CI).
@@ -61,4 +63,55 @@ export function backCoverArtwork(palette: CoverPalette): Buffer {
   <rect x="630" y="1280" width="230" height="110" rx="6" fill="${band}"/>
   ${bars.join("\n  ")}
 </svg>`);
+}
+
+/**
+ * Photo-like artwork, for the performance seed only.
+ *
+ * The flat SVG above compresses roughly ten times better than a photograph, so
+ * measuring page weight with it would flatter the numbers and hide exactly the
+ * regression a perf test exists to catch. Gaussian noise, slightly blurred to
+ * give the local correlation a real photo has, lands in the same ballpark as a
+ * scanned book cover.
+ */
+export async function photoArtwork(seed: number, side: "front" | "back"): Promise<Buffer> {
+  const hue = (seed * 47 + (side === "back" ? 23 : 0)) % 360;
+  const tint = hslToRgb(hue, 0.45, 0.5);
+  return sharp({
+    create: {
+      width: 1200,
+      height: 1800,
+      channels: 3,
+      // background is ignored once noise is set, but sharp's types require it
+      background: { r: 128, g: 128, b: 128 },
+      noise: { type: "gaussian", mean: 128, sigma: 42 },
+    },
+  })
+    .blur(1.6)
+    .tint(tint)
+    .png()
+    .toBuffer();
+}
+
+function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] =
+    h < 60
+      ? [c, x, 0]
+      : h < 120
+        ? [x, c, 0]
+        : h < 180
+          ? [0, c, x]
+          : h < 240
+            ? [0, x, c]
+            : h < 300
+              ? [x, 0, c]
+              : [c, 0, x];
+  return {
+    r: Math.round((r + m) * 255),
+    g: Math.round((g + m) * 255),
+    b: Math.round((b + m) * 255),
+  };
 }

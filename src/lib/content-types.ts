@@ -22,6 +22,8 @@ export type StoredBook = {
   coverImage: string | null;
   /** 900px WebP data URI — back cover ("4e de couverture"), shown by flipping the card. */
   backCoverImage: string | null;
+  /** Lien marchand externe. null tant que l'éditeur n'en a pas renseigné. */
+  purchaseUrl: string | null;
   publishedAt: string | null;
   sortOrder: number;
   createdAt: string;

@@ -7,7 +7,7 @@
 
 const SLUG = "cy-store";
 const SANS_VERSO = "cy-sans-verso";
-const TITRE = "Livre du store";
+const TITRE = "Cy Store";
 
 /** Champs attendus dans content.json. Volontairement exhaustif : c'est ce qui a
  *  attrapé un spread qui recopiait le livre entier dans la mise à jour. */
@@ -18,6 +18,7 @@ const CHAMPS_ATTENDUS = [
   "createdAt",
   "id",
   "publishedAt",
+  "purchaseUrl",
   "slug",
   "sortOrder",
   "status",
@@ -28,15 +29,14 @@ const CHAMPS_ATTENDUS = [
 /** Plafond appliqué par src/lib/images.ts à chaque variante stockée. */
 const MAX_STORED_BYTES = 250 * 1024;
 
-function creerLivre(slug: string, titre: string, avecVerso: boolean) {
+// Le slug n'est plus saisi : il découle du titre, d'où des titres en « Cy … ».
+function creerLivre(titre: string, avecVerso: boolean) {
   cy.visit("/admin/livres/nouveau");
   cy.get("[data-cy=book-form-title-fr]").type(titre);
   cy.get("[data-cy=book-form-synopsis-fr]").type("Synopsis FR pour vérifier le stockage.");
   cy.get("[data-cy=book-form-title-en]").type(`${titre} (EN)`);
   cy.get("[data-cy=book-form-synopsis-en]").type("EN synopsis to check what gets stored.");
-  cy.get("[data-cy=book-form-slug]").clear().type(slug);
   cy.get("[data-cy=book-form-status]").select("published");
-  cy.get("[data-cy=book-form-sort-order]").clear().type("0");
   cy.get("[data-cy=book-form-cover]").selectFile("cypress/fixtures/cover-upload.jpg");
   if (avecVerso) {
     cy.get("[data-cy=book-form-back-cover]").selectFile("cypress/fixtures/back-cover-upload.jpg");
@@ -61,7 +61,7 @@ describe("Contenu réellement stocké", () => {
   });
 
   it("écrit trois variantes WebP inline et rien d'autre", () => {
-    creerLivre(SLUG, TITRE, true);
+    creerLivre(TITRE, true);
 
     cy.storedBook(SLUG).should((livre) => {
       expect(livre, "le livre est bien dans content.json").to.not.equal(null);
@@ -83,17 +83,21 @@ describe("Contenu réellement stocké", () => {
     });
   });
 
-  it("respecte l'ordre d'affichage demandé", () => {
-    // sortOrder 0 contre 1, 2, 3 pour le seed : le livre passe devant.
-    // On compare des positions plutôt que la première carte, pour rester juste
-    // même si une autre spec a laissé un livre `cy-` derrière elle.
+  it("range un nouveau livre en fin de catalogue", () => {
+    // L'ordre ne se saisit plus dans le formulaire : il se règle au
+    // glisser-déposer (spec book-order). Un livre créé prend donc le dernier
+    // rang, ce qui est le comportement le moins surprenant.
+    cy.task<string[]>("storedSlugs").then((slugs) => {
+      cy.wrap(slugs).should("include", SLUG);
+    });
+
     cy.visit("/fr/projets");
     cy.get("[data-cy=projects-grid] [data-cy^=book-card-]").then(($cartes) => {
-      const slugs = [...$cartes].map((carte) => carte.getAttribute("data-cy"));
-      expect(slugs.indexOf(`book-card-${SLUG}`)).to.be.greaterThan(-1);
-      expect(slugs.indexOf(`book-card-${SLUG}`)).to.be.lessThan(
-        slugs.indexOf("book-card-les-jardins-suspendus")
-      );
+      const ordre = [...$cartes].map((carte) => carte.getAttribute("data-cy"));
+      expect(
+        ordre.indexOf(`book-card-${SLUG}`),
+        "le nouveau livre est après ceux du seed"
+      ).to.be.greaterThan(ordre.indexOf("book-card-les-jardins-suspendus"));
     });
   });
 
@@ -103,13 +107,17 @@ describe("Contenu réellement stocké", () => {
 
       cy.visit("/admin");
       cy.get(`[data-cy=admin-book-row-${SLUG}]`).click();
-      cy.get("[data-cy=book-form-title-fr]").clear().type(`${TITRE} révisé`);
+      // Le livre est publié, donc son titre est verrouillé : on modifie un champ
+      // qui reste éditable, l'objet du test étant l'intégrité des images.
+      cy.get("[data-cy=book-form-purchase-url]").clear().type("https://libraire.test/cy-store");
       cy.get("[data-cy=book-form-submit]").click();
       cy.get("[data-cy=book-form-success]").should("be.visible");
 
       cy.storedBook(SLUG).should((apres) => {
         const final = apres!;
-        expect(final.titles.fr, "le titre a bien changé").to.eq(`${TITRE} révisé`);
+        expect(final.purchaseUrl, "le champ édité a bien changé").to.eq(
+          "https://libraire.test/cy-store"
+        );
         // Régression connue : un spread mal placé recopiait tout l'ancien livre.
         expect(final.coverImage!.bytes).to.eq(initial.coverImage!.bytes);
         expect(final.coverThumb!.bytes).to.eq(initial.coverThumb!.bytes);
@@ -121,7 +129,7 @@ describe("Contenu réellement stocké", () => {
   });
 
   it("accepte un livre sans 4e de couverture et n'affiche alors aucun retournement", () => {
-    creerLivre(SANS_VERSO, "Livre sans verso", false);
+    creerLivre("Cy Sans Verso", false);
 
     cy.storedBook(SANS_VERSO).should((livre) => {
       expect(livre!.backCoverImage, "aucun verso stocké").to.equal(null);

@@ -17,8 +17,11 @@
     "e2e:dev": "dotenv -e .env.test -- next dev",
     "cy:run": "node scripts/run-cypress.cjs run",
     "cy:open": "node scripts/run-cypress.cjs open",
+    "cy:perf": "node scripts/run-cypress.cjs run --spec cypress/perf/catalogue.cy.ts --config specPattern=cypress/perf/**/*.cy.ts",
     "e2e": "npm run e2e:seed && npm run e2e:build && start-server-and-test e2e:start http://localhost:3000 cy:run",
-    "e2e:open": "npm run e2e:seed && start-server-and-test e2e:dev http://localhost:3000 cy:open"
+    "e2e:open": "npm run e2e:seed && start-server-and-test e2e:dev http://localhost:3000 cy:open",
+    "perf:seed": "dotenv -e .env.test -- tsx scripts/seed-content.ts --e2e --bulk=50",
+    "perf": "npm run perf:seed && npm run e2e:build && start-server-and-test e2e:start http://localhost:3000 cy:perf"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -3,12 +3,9 @@ import type { ComponentPropsWithoutRef, ElementType, ReactNode } from "react";
 type Variant = "primary" | "ghost" | "danger";
 
 const variantClasses: Record<Variant, string> = {
-  primary:
-    "bg-ink text-paper hover:bg-accent-deep border border-transparent",
-  ghost:
-    "bg-transparent text-ink border border-line hover:border-ink",
-  danger:
-    "bg-transparent text-accent-deep border border-line hover:border-accent-deep",
+  primary: "bg-ink text-paper hover:bg-accent-deep border border-transparent",
+  ghost: "bg-transparent text-ink border border-line hover:border-ink",
+  danger: "bg-transparent text-accent-deep border border-line hover:border-accent-deep",
 };
 
 const baseClasses =

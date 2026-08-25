@@ -1,8 +1,8 @@
 # Maison d'édition — Site vitrine & back office
 
 Site vitrine bilingue (FR/EN) pour une maison d'édition, avec back office permettant à
-l'éditeur de gérer ses livres (couverture, 4ème de couverture, titre, synopsis traduits, statut
-brouillon/publié). Pensé pour être hébergé sur un VPS OVH.
+l'éditeur de gérer ses livres (couverture, 4ème de couverture, titre, synopsis traduits, lien
+d'achat, statut brouillon/publié). Pensé pour être hébergé sur un VPS OVH.
 
 > **Variante sans base de données.** Toutes les données du site — textes **et** images — tiennent
 > dans un seul fichier JSON. Pas de SQLite, pas de migrations, pas de dossier d'uploads : une
@@ -41,6 +41,7 @@ Un fichier, désigné par `CONTENT_FILE` (`./data/content.json` en dev) :
       "coverThumb": "data:image/webp;base64,…",
       "coverImage": "data:image/webp;base64,…",
       "backCoverImage": "data:image/webp;base64,…",
+      "purchaseUrl": "https://libraire.example/…",
       "translations": { "fr": { "title": "…", "synopsis": "…" }, "en": { … } }
     }
   ]
@@ -56,6 +57,18 @@ Ordre de grandeur : ~15 à 25 Ko par livre avec les visuels de démonstration, j
 variante pour de vraies photographies (plafond appliqué à l'encodage). Le modèle reste confortable
 jusqu'à une cinquantaine de titres ; au-delà, il faudra ressortir les images du JSON.
 
+## Ce que l'éditeur ne saisit pas
+
+Deux valeurs sont déduites plutôt que demandées, parce qu'elles se trompent facilement à la main :
+
+- **L'adresse publique** vient du titre français (à défaut de l'anglais), suffixée en cas de
+  doublon. Elle suit le titre tant que le livre est en brouillon, puis se fige une fois publié —
+  corriger une coquille ne doit pas casser un lien déjà partagé. Conséquence assumée : **passer un
+  livre en « Publié » fige aussi son titre**, ce que le back office annonce par une confirmation
+  au basculement puis par un champ verrouillé.
+- **L'ordre du catalogue** se règle en glissant les livres dans le tableau de bord, ou aux flèches
+  ↑ ↓ depuis la poignée. Un nouveau livre arrive en fin de liste.
+
 ## Commandes
 
 | Commande | Rôle |
@@ -66,6 +79,7 @@ jusqu'à une cinquantaine de titres ; au-delà, il faudra ressortir les images d
 | `node scripts/hash-password.mjs "…"` | Génère `ADMIN_PASSWORD_HASH_B64` pour `.env` |
 | `npm run e2e` | Suite Cypress complète headless (fichier de contenu de test dédié) |
 | `npm run e2e:open` | Cypress interactif sur serveur de dev |
+| `npm run perf` | Test de charge : 50 livres, mesure poids et temps du catalogue |
 
 ## Tests e2e
 
@@ -85,6 +99,35 @@ jusqu'à une cinquantaine de titres ; au-delà, il faudra ressortir les images d
 Deux tâches Node (`cypress.config.ts`) permettent d'asserter sur le fichier de contenu
 lui-même plutôt que sur le rendu : sans base de données, c'est le seul moyen de vérifier ce qui
 est vraiment persisté. Détails : skill `run-e2e`.
+
+## Test de charge
+
+`npm run perf` seede 50 livres avec des images à **entropie photographique** — l'artwork
+géométrique des autres seeds se compresse ~15 fois mieux qu'une vraie couverture et donnerait
+des mesures flatteuses — puis mesure la page la plus exposée, la liste des projets. Mesures
+nominales sur une machine de dev, 52 livres publiés :
+
+| Mesure | Valeur |
+| --- | --- |
+| Liste — HTML total | 1 600 Ko |
+| Liste — images distinctes | 751 Ko (14 Ko par livre) |
+| Liste — réponse serveur | ~200 ms |
+| Navigateur — chargement complet | ~460 ms |
+| Défilement — pire tâche bloquante | ~100 ms |
+| Fiche livre — HTML total | 582 Ko |
+| `content.json` | 13,6 Mo |
+
+Le test échoue si un ordre de grandeur change — typiquement si les listes se mettaient à servir
+la couverture 900 px au lieu de la miniature 320 px, ce qu'aucun test fonctionnel ne verrait.
+
+Deux constats que ces mesures ont sortis, non corrigés à ce jour :
+
+- **Chaque image apparaît deux fois dans le HTML** : dans le `<img src>` et dans la charge utile
+  RSC que Next embarque pour l'hydratation. La moitié du poids image d'une page est un doublon.
+  C'est le prix structurel de l'inline avec l'App Router.
+- **La prop `priority` de `next/image`** ajoute un `<link rel="preload">` sur la couverture, qui
+  recopie une troisième fois la data URI. Précharger une data URI ne sert à rien, les octets sont
+  déjà dans le document : ~110 Ko gaspillés par fiche livre.
 
 ## Déploiement (OVH VPS)
 

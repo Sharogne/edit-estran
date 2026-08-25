@@ -1,6 +1,12 @@
 import { BACK_COVER, COVER_FULL, COVER_THUMB, processImageBuffer } from "../../src/lib/images";
 import type { StoredBook } from "../../src/lib/content-types";
-import { backCoverArtwork, coverArtwork, type CoverPalette } from "./placeholder-images";
+import {
+  backCoverArtwork,
+  coverArtwork,
+  palettes,
+  photoArtwork,
+  type CoverPalette,
+} from "./placeholder-images";
 
 export type BookSeedDef = {
   slug: string;
@@ -9,6 +15,14 @@ export type BookSeedDef = {
   sortOrder: number;
   palette: CoverPalette;
   hasBackCover: boolean;
+  /** Lien marchand facultatif — absent sur la plupart des livres. */
+  purchaseUrl?: string;
+  /**
+   * When set, the artwork is photo-like instead of flat SVG (performance seed).
+   * Flat geometry compresses ~15x better than a photograph, so a perf run on it
+   * would flatter the numbers and hide the very regression the test looks for.
+   */
+  photoSeed?: number;
   fr: { title: string; synopsis: string };
   en: { title: string; synopsis: string };
 };
@@ -20,7 +34,13 @@ export type BookSeedDef = {
  * through the very same encoder the back office uses for real uploads.
  */
 export async function buildStoredBook(def: BookSeedDef): Promise<StoredBook> {
-  const cover = coverArtwork(def.palette);
+  const photo = def.photoSeed !== undefined;
+  const cover = photo ? await photoArtwork(def.photoSeed!, "front") : coverArtwork(def.palette);
+  const back = !def.hasBackCover
+    ? null
+    : photo
+      ? await photoArtwork(def.photoSeed!, "back")
+      : backCoverArtwork(def.palette);
   const now = new Date().toISOString();
 
   return {
@@ -29,11 +49,10 @@ export async function buildStoredBook(def: BookSeedDef): Promise<StoredBook> {
     status: def.status,
     coverThumb: await processImageBuffer(cover, COVER_THUMB),
     coverImage: await processImageBuffer(cover, COVER_FULL),
-    backCoverImage: def.hasBackCover
-      ? await processImageBuffer(backCoverArtwork(def.palette), BACK_COVER)
-      : null,
+    backCoverImage: back ? await processImageBuffer(back, BACK_COVER) : null,
     publishedAt: def.publishedAt ? def.publishedAt.toISOString() : null,
     sortOrder: def.sortOrder,
+    purchaseUrl: def.purchaseUrl ?? null,
     createdAt: now,
     updatedAt: now,
     translations: { fr: def.fr, en: def.en },
@@ -45,6 +64,7 @@ export const demoBooks: BookSeedDef[] = [
   {
     slug: "les-jardins-suspendus",
     status: "published",
+    purchaseUrl: "https://exemple-librairie.test/les-jardins-suspendus",
     publishedAt: new Date("2025-03-14"),
     sortOrder: 1,
     palette: { bg: "#1f3a2d", band: "#e9e2d0", accent: "#c47a4a" },
@@ -115,3 +135,39 @@ export const demoBooks: BookSeedDef[] = [
     },
   },
 ];
+
+/**
+ * A catalogue of `count` published books with photograph-weight images, used
+ * only by the performance seed (`npm run seed -- --bulk=N`). Slugs are
+ * zero-padded so the order stays stable, and sit after the demo books.
+ */
+export function perfBooks(count: number): BookSeedDef[] {
+  const paletteList = Object.values(palettes);
+  return Array.from({ length: count }, (_, index) => {
+    const n = String(index + 1).padStart(3, "0");
+    return {
+      slug: `perf-livre-${n}`,
+      status: "published" as const,
+      publishedAt: new Date(Date.UTC(2020 + (index % 6), index % 12, (index % 27) + 1)),
+      sortOrder: 100 + index,
+      palette: paletteList[index % paletteList.length],
+      hasBackCover: true,
+      photoSeed: index + 1,
+      fr: {
+        title: `Livre de charge ${n}`,
+        synopsis:
+          "Ouvrage généré pour mesurer la tenue du catalogue à grande échelle. Le texte " +
+          "reprend une longueur réaliste de quatrième de couverture, afin que le poids du " +
+          "HTML mesuré ne soit pas seulement celui des images mais aussi celui des contenus " +
+          `rédactionnels qui l'accompagnent sur la page de liste comme sur la fiche. (${n})`,
+      },
+      en: {
+        title: `Load Test Book ${n}`,
+        synopsis:
+          "A generated title used to measure how the catalogue holds up at scale. The text " +
+          "keeps a realistic blurb length so the measured HTML weight reflects prose as well " +
+          `as imagery, on the list page and on the book page alike. (${n})`,
+      },
+    };
+  });
+}

@@ -2,25 +2,15 @@ import { z } from "zod";
 
 // Single source of truth for book form constraints (used by all server actions).
 
-export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
+// Une locale peut être laissée vide : le rendu reprend alors l'autre langue
+// (voir resolveField dans src/lib/books.ts). L'exigence porte donc sur
+// l'ENSEMBLE des locales, pas sur chacune — d'où le superRefine plus bas.
 const localeContentSchema = z.object({
-  title: z.string().trim().min(1, "Le titre est requis").max(200, "Titre trop long"),
-  synopsis: z
-    .string()
-    .trim()
-    .min(1, "Le synopsis est requis")
-    .max(5000, "Synopsis trop long (5000 caractères max)"),
+  title: z.string().trim().max(200, "Titre trop long"),
+  synopsis: z.string().trim().max(5000, "Synopsis trop long (5000 caractères max)"),
 });
 
-export const bookFormSchema = z.object({
-  slug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(1, "Le slug est requis")
-    .max(120, "Slug trop long")
-    .regex(SLUG_PATTERN, "Slug invalide : minuscules, chiffres et tirets uniquement"),
+const bookFormBaseSchema = z.object({
   status: z.enum(["draft", "published"]),
   // <input type="date"> sends "" or "YYYY-MM-DD"
   publishedAt: z
@@ -28,9 +18,42 @@ export const bookFormSchema = z.object({
     .trim()
     .transform((value) => (value === "" ? null : new Date(`${value}T00:00:00.000Z`)))
     .pipe(z.date().nullable()),
-  sortOrder: z.coerce.number().int().min(0).max(9999).default(0),
+  // Lien marchand facultatif. Restreint à http/https : ce lien devient un href,
+  // et accepter javascript: ou data: ouvrirait une injection depuis le back office.
+  purchaseUrl: z
+    .string()
+    .trim()
+    .max(500, "Lien trop long")
+    .refine((valeur) => {
+      if (valeur === "") return true;
+      try {
+        return ["http:", "https:"].includes(new URL(valeur).protocol);
+      } catch {
+        return false;
+      }
+    }, "Lien invalide : une adresse commençant par http:// ou https://")
+    .transform((valeur) => (valeur === "" ? null : valeur)),
   fr: localeContentSchema,
   en: localeContentSchema,
+});
+
+export const bookFormSchema = bookFormBaseSchema.superRefine((valeurs, ctx) => {
+  // Au moins une langue doit porter chaque champ, sinon le livre n'a de titre
+  // ou de synopsis dans aucune langue et la fiche publique serait vide.
+  if (!valeurs.fr.title && !valeurs.en.title) {
+    ctx.addIssue({
+      code: "custom",
+      path: [],
+      message: "Le titre est requis dans au moins une langue",
+    });
+  }
+  if (!valeurs.fr.synopsis && !valeurs.en.synopsis) {
+    ctx.addIssue({
+      code: "custom",
+      path: [],
+      message: "Le synopsis est requis dans au moins une langue",
+    });
+  }
 });
 
 export type BookFormValues = z.infer<typeof bookFormSchema>;
@@ -52,10 +75,9 @@ export const imageFileSchema = z
 /** Reads the book form fields out of a FormData (names match BookForm inputs). */
 export function bookFormDataToObject(formData: FormData) {
   return {
-    slug: String(formData.get("slug") ?? ""),
     status: String(formData.get("status") ?? "draft"),
     publishedAt: String(formData.get("publishedAt") ?? ""),
-    sortOrder: String(formData.get("sortOrder") ?? "0"),
+    purchaseUrl: String(formData.get("purchaseUrl") ?? ""),
     fr: {
       title: String(formData.get("title_fr") ?? ""),
       synopsis: String(formData.get("synopsis_fr") ?? ""),
@@ -66,3 +88,9 @@ export function bookFormDataToObject(formData: FormData) {
     },
   };
 }
+
+/**
+ * Ordre du catalogue, envoyé par le glisser-déposer du tableau de bord.
+ * Le rang d'un livre n'est plus saisi à la main : il découle de sa position.
+ */
+export const reorderSchema = z.array(z.string().min(1)).min(1).max(1000);

@@ -7,8 +7,14 @@ import type { z } from "zod";
 import { mutateContent, readContent } from "@/lib/store";
 import type { StoredBook } from "@/lib/content-types";
 import { requireAdmin } from "@/lib/session";
+import { slugify, uniqueSlug } from "@/lib/slugify";
 import { routing } from "@/i18n/routing";
-import { bookFormDataToObject, bookFormSchema, imageFileSchema } from "@/lib/validation/book";
+import {
+  bookFormDataToObject,
+  bookFormSchema,
+  imageFileSchema,
+  reorderSchema,
+} from "@/lib/validation/book";
 import { BACK_COVER, COVER_FULL, COVER_THUMB, processImage } from "@/lib/images";
 
 export type BookActionState = { error?: string; success?: boolean };
@@ -26,18 +32,51 @@ function revalidatePublic(...slugs: (string | undefined)[]) {
   revalidatePath("/sitemap.xml");
 }
 
+/** Libellés tels qu'ils apparaissent dans le formulaire, pour des erreurs lisibles. */
+const CHAMPS: Record<string, string> = {
+  status: "Statut",
+  publishedAt: "Date de parution",
+  purchaseUrl: "Lien d'achat",
+  "fr.title": "Titre (FR)",
+  "fr.synopsis": "Synopsis (FR)",
+  "en.title": "Titre (EN)",
+  "en.synopsis": "Synopsis (EN)",
+};
+
 function formatZodError(error: z.ZodError): string {
   const issue = error.issues[0];
-  const field = issue.path.join(".");
-  return field ? `${field} : ${issue.message}` : issue.message;
+  const chemin = issue.path.join(".");
+  // Une contrainte inter-langues n'a pas de chemin : son message est complet.
+  if (!chemin) return issue.message;
+  return `${CHAMPS[chemin] ?? chemin} : ${issue.message}`;
 }
 
 class ImageValidationError extends Error {}
-class SlugTakenError extends Error {}
 class BookGoneError extends Error {}
 
-const SLUG_TAKEN = "Ce slug est déjà utilisé par un autre livre.";
 const BOOK_GONE = "Livre introuvable.";
+
+/**
+ * Dérive l'adresse publique du titre français, à défaut de l'anglais.
+ * L'éditeur ne saisit plus de slug : une URL est une conséquence du titre, pas
+ * un paramètre de plus à remplir.
+ */
+function slugDepuisTitre(
+  data: { fr: { title: string }; en: { title: string } },
+  dejaPris: (candidat: string) => boolean
+): string {
+  return uniqueSlug(slugify(data.fr.title || data.en.title), dejaPris);
+}
+
+/**
+ * Un slug ne suit le titre que TANT QUE le livre n'a jamais été publié.
+ * Une fois l'adresse publique diffusée (partage, favori, indexation), la
+ * régénérer casserait ces liens en silence — et l'éditeur n'a plus de champ où
+ * s'en apercevoir. `publishedAt` non nul signe un livre déjà rendu public.
+ */
+function slugFige(livre: { publishedAt: string | null }): boolean {
+  return livre.publishedAt !== null;
+}
 
 /** Reads one optional image out of a FormData field. Throws a user-readable message. */
 function imageFile(formData: FormData, field: string): File | undefined {
@@ -113,28 +152,28 @@ export async function createBook(
   const bookId = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  try {
-    await mutateContent((draft) => {
-      // Uniqueness is ours to enforce now that there is no unique index.
-      if (draft.books.some((book) => book.slug === data.slug)) throw new SlugTakenError();
-      draft.books.push({
-        ...images,
-        id: bookId,
-        slug: data.slug,
-        status: data.status,
-        publishedAt: effectivePublishedAt(data.status, data.publishedAt),
-        sortOrder: data.sortOrder,
-        createdAt: now,
-        updatedAt: now,
-        translations: { fr: data.fr, en: data.en },
-      });
+  const slug = await mutateContent((draft) => {
+    const nouveauSlug = slugDepuisTitre(data, (candidat) =>
+      draft.books.some((book) => book.slug === candidat)
+    );
+    const dernierRang = draft.books.reduce((max, livre) => Math.max(max, livre.sortOrder), -1);
+    draft.books.push({
+      ...images,
+      id: bookId,
+      slug: nouveauSlug,
+      status: data.status,
+      publishedAt: effectivePublishedAt(data.status, data.publishedAt),
+      // Rang posé en fin : l'ordre se règle ensuite au glisser-déposer.
+      sortOrder: dernierRang + 1,
+      purchaseUrl: data.purchaseUrl,
+      createdAt: now,
+      updatedAt: now,
+      translations: { fr: data.fr, en: data.en },
     });
-  } catch (error) {
-    if (error instanceof SlugTakenError) return { error: SLUG_TAKEN };
-    throw error;
-  }
+    return nouveauSlug;
+  });
 
-  revalidatePublic(data.slug);
+  revalidatePublic(slug);
   redirect(`/admin/livres/${bookId}`);
 }
 
@@ -165,31 +204,33 @@ export async function updateBook(
 
   const images = await applyImages(existing, cover, backCover);
 
+  let nouveauSlug = existing.slug;
   try {
     await mutateContent((draft) => {
       const book = draft.books.find((candidate) => candidate.id === bookId);
       if (!book) throw new BookGoneError();
-      if (draft.books.some((other) => other.id !== bookId && other.slug === data.slug)) {
-        throw new SlugTakenError();
-      }
+      nouveauSlug = slugFige(book)
+        ? book.slug
+        : slugDepuisTitre(data, (candidat) =>
+            draft.books.some((autre) => autre.id !== bookId && autre.slug === candidat)
+          );
       Object.assign(book, {
         ...images,
-        slug: data.slug,
+        slug: nouveauSlug,
         status: data.status,
         publishedAt: effectivePublishedAt(data.status, data.publishedAt),
-        sortOrder: data.sortOrder,
+        purchaseUrl: data.purchaseUrl,
         updatedAt: new Date().toISOString(),
         translations: { fr: data.fr, en: data.en },
       } satisfies Partial<StoredBook>);
     });
   } catch (error) {
-    if (error instanceof SlugTakenError) return { error: SLUG_TAKEN };
     if (error instanceof BookGoneError) return { error: BOOK_GONE };
     throw error;
   }
 
   // Old slug too: its public page must drop out if the slug changed.
-  revalidatePublic(existing.slug, data.slug);
+  revalidatePublic(existing.slug, nouveauSlug);
   revalidatePath(`/admin/livres/${bookId}`);
   return { success: true };
 }
@@ -207,4 +248,26 @@ export async function deleteBook(formData: FormData): Promise<void> {
 
   if (removedSlug) revalidatePublic(removedSlug);
   redirect("/admin");
+}
+
+export async function reorderBooks(orderedIds: string[]): Promise<BookActionState> {
+  await requireAdmin();
+
+  const parsed = reorderSchema.safeParse(orderedIds);
+  if (!parsed.success) return { error: "Ordre invalide." };
+
+  await mutateContent((draft) => {
+    const rang = new Map(parsed.data.map((id, index) => [id, index]));
+    // Un livre absent de la liste reçue (créé depuis l'affichage de la page)
+    // n'est pas perdu : il se range derrière ceux qui viennent d'être ordonnés.
+    let suivant = rang.size;
+    for (const livre of draft.books) {
+      livre.sortOrder = rang.get(livre.id) ?? suivant++;
+    }
+  });
+
+  // L'ordre ne change que les pages de liste, pas les fiches.
+  revalidatePublic();
+  revalidatePath("/admin");
+  return { success: true };
 }

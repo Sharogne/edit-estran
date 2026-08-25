@@ -63,6 +63,28 @@ derrière lui. Deux parades, à conserver :
 - les specs publiques qui comptent des cartes excluent les slugs `cy-`
   (`.not("[data-cy^=book-card-cy-]")`), pour qu'un résidu admin ne les fasse pas tomber en cascade.
 
+## Test de charge
+
+```bash
+npm run perf        # seed 50 livres + build + mesures (≈ 2 min, dont ~40 s d'encodage)
+```
+
+Le spec vit dans `cypress/perf/`, **hors de `cypress/e2e/`** : il n'est donc jamais exécuté par
+`npm run e2e`, qui doit rester rapide. `npm run cy:perf` le relance seul contre un serveur déjà
+démarré (utile pour itérer sans re-seeder).
+
+Deux règles à respecter si tu y touches :
+
+- **Images à entropie photographique obligatoire.** `perfBooks()` passe `photoSeed`, ce qui
+  bascule `buildStoredBook` sur `photoArtwork()` au lieu du SVG plat. Mesurer avec l'artwork
+  géométrique donnerait ~15 fois moins lourd : des chiffres rassurants et faux.
+- **Budgets calibrés, pas devinés.** Chaque entrée de `BUDGET` porte en commentaire la valeur
+  nominale mesurée. Après un changement qui déplace un chiffre, relancer, constater, et mettre à
+  jour la valeur nominale — pas seulement le seuil.
+
+Le récapitulatif chiffré s'affiche à la fin du run via la tâche `log`, même quand tout est vert :
+un test de perf qui ne montre pas ses mesures ne sert qu'à moitié.
+
 ## Lancer une seule spec (headless)
 
 ```bash

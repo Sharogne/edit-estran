@@ -1,6 +1,6 @@
 import { readContent } from "@/lib/store";
 import type { StoredBook, StoredTranslation } from "@/lib/content-types";
-import type { Locale } from "@/i18n/routing";
+import { routing, type Locale } from "@/i18n/routing";
 
 // All book reads go through this module (never touch the store from pages/components).
 // The store keeps dates as ISO strings; they are turned back into Date objects here
@@ -19,6 +19,7 @@ export type PublicBook = {
 export type PublicBookDetail = PublicBook & {
   coverImage: string | null;
   backCoverImage: string | null;
+  purchaseUrl: string | null;
 };
 
 export type AdminBook = {
@@ -29,12 +30,34 @@ export type AdminBook = {
   sortOrder: number;
   coverThumb: string | null;
   backCoverImage: string | null;
+  purchaseUrl: string | null;
   translations: Record<Locale, StoredTranslation>;
 };
 
-/** Picks the requested locale's translation, falling back to French. */
-function pickTranslation(book: StoredBook, locale: Locale): StoredTranslation | undefined {
-  return book.translations[locale] ?? book.translations.fr ?? Object.values(book.translations)[0];
+/**
+ * Resolves one translated field, falling back across locales.
+ *
+ * A locale can legitimately be left empty in the back office: the editor may
+ * publish a book before its translation exists. The fallback is per FIELD, not
+ * per locale, so a translated title with an untranslated synopsis works too.
+ * Nothing is duplicated at write time — the store keeps what was actually
+ * typed, and filling the translation later just starts showing it.
+ */
+function resolveField(
+  book: StoredBook,
+  locale: Locale,
+  field: keyof StoredTranslation
+): string | undefined {
+  const ordre: Locale[] = [
+    locale,
+    routing.defaultLocale,
+    ...routing.locales.filter((autre) => autre !== locale && autre !== routing.defaultLocale),
+  ];
+  for (const candidat of ordre) {
+    const valeur = book.translations[candidat]?.[field]?.trim();
+    if (valeur) return valeur;
+  }
+  return undefined;
 }
 
 function toDate(iso: string | null): Date | null {
@@ -55,14 +78,13 @@ function isPublished(book: StoredBook): boolean {
 }
 
 function toPublicBook(book: StoredBook, locale: Locale): PublicBook {
-  const t = pickTranslation(book, locale);
   return {
     id: book.id,
     slug: book.slug,
     coverThumb: book.coverThumb,
     publishedAt: toDate(book.publishedAt),
-    title: t?.title ?? book.slug,
-    synopsis: t?.synopsis ?? "",
+    title: resolveField(book, locale, "title") ?? book.slug,
+    synopsis: resolveField(book, locale, "synopsis") ?? "",
   };
 }
 
@@ -92,6 +114,7 @@ export async function getPublishedBookBySlug(
     ...toPublicBook(book, locale),
     coverImage: book.coverImage,
     backCoverImage: book.backCoverImage,
+    purchaseUrl: book.purchaseUrl ?? null,
   };
 }
 
@@ -114,7 +137,7 @@ export async function getAllBooksForAdmin() {
       publishedAt: toDate(book.publishedAt),
       updatedAt: new Date(book.updatedAt),
       coverThumb: book.coverThumb,
-      title: pickTranslation(book, "fr")?.title ?? book.slug,
+      title: resolveField(book, routing.defaultLocale, "title") ?? book.slug,
     }));
 }
 
@@ -130,6 +153,7 @@ export async function getBookForAdmin(id: string): Promise<AdminBook | null> {
     sortOrder: book.sortOrder,
     coverThumb: book.coverThumb,
     backCoverImage: book.backCoverImage,
+    purchaseUrl: book.purchaseUrl ?? null,
     translations: book.translations,
   };
 }
