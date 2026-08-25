@@ -148,6 +148,15 @@ docker compose up -d
 
 ## Pièges connus
 
+- **`next start` relit `next.config.ts` au démarrage — l'image doit donc le
+  contenir.** Le Dockerfile ne copiait dans l'étape finale que `.next`,
+  `node_modules`, `public` et `package.json` : Next démarrait sur ses valeurs par
+  défaut sans le signaler, et la limite d'envoi des server actions retombait à
+  1 Mo. Toute couverture un peu lourde partait en 413, que l'éditeur ne voyait
+  que comme un écran d'erreur Next. Le script vérifie maintenant la config
+  effective en interrogeant le chargeur de Next DANS le conteneur : une page qui
+  répond 200 ne prouve rien ici. Si `next.config.ts` importe un nouveau fichier,
+  le `COPY` du Dockerfile doit suivre.
 - **`NEXT_PUBLIC_SITE_URL` est figée à la compilation.** Changer l'URL Funnel
   impose de reconstruire l'image, pas seulement de redémarrer. Le script le fait
   de toute façon.
