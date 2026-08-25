@@ -10,6 +10,8 @@ module.exports = {
       cwd: __dirname,
       script: "node_modules/next/dist/bin/next",
       args: "start --port 3000",
+      // MUST stay 1: the content store keeps content.json in memory and
+      // serialises writes in-process. Cluster mode would diverge the caches.
       instances: 1,
       autorestart: true,
       max_memory_restart: "400M",

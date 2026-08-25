@@ -8,11 +8,14 @@ description: Installation initiale du VPS OVH et procédure de déploiement/mise
 Cible : VPS OVH sous **Ubuntu 24.04 LTS** (ou Debian 12). Architecture serveur :
 
 ```
-/srv/edit/app/              Le dépôt git (code de l'application)
-/srv/edit/shared/data/      app.db (SQLite) — HORS du dépôt, survit aux déploiements
-/srv/edit/shared/uploads/   Images uploadées — idem
-/srv/edit/backups/          Backups quotidiens (db + uploads)
+/srv/edit/app/                  Le dépôt git (code de l'application)
+/srv/edit/shared/content.json   TOUTES les données du site — HORS du dépôt, survit aux déploiements
+/srv/edit/backups/              Copies datées de content.json
 ```
+
+Il n'y a **ni base de données ni dossier d'uploads** : textes et images vivent dans le même
+fichier JSON. Un backup, c'est la copie de ce fichier ; un déploiement ne touche jamais aux
+données.
 
 ## 1. Installation initiale (une seule fois)
 
@@ -28,38 +31,37 @@ sudo npm i -g pm2
 pm2 startup   # exécuter la commande affichée (démarrage au boot)
 
 # --- Arborescence + code ---
-sudo mkdir -p /srv/edit/{app,shared/data,shared/uploads,backups}
+sudo mkdir -p /srv/edit/{app,shared,backups}
 sudo chown -R deploy:deploy /srv/edit
 git clone https://github.com/Sharogne/edit-estran.git /srv/edit/app && cd /srv/edit/app
 
 # --- Environnement de prod ---
 cp .env.example .env
+node scripts/hash-password.mjs "<mot-de-passe-de-l-éditeur>"   # colle la ligne dans .env
 # Éditer .env :
-#   DATABASE_URL="file:/srv/edit/shared/data/app.db"
-#   UPLOADS_DIR="/srv/edit/shared/uploads"
+#   CONTENT_FILE="/srv/edit/shared/content.json"
 #   SESSION_SECRET=<node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
-#   ADMIN_EMAIL / ADMIN_PASSWORD : identifiants réels de l'éditeur
+#   ADMIN_EMAIL=<adresse réelle de l'éditeur>
+#   ADMIN_PASSWORD_HASH_B64=<sortie de hash-password.mjs, telle quelle>
 #   NEXT_PUBLIC_SITE_URL="https://<domaine>"
 
 # --- Première mise en service ---
 npm ci
-npm run db:deploy && npm run db:seed      # migrations + compte admin
 npm run build
 pm2 start ecosystem.config.cjs && pm2 save
 ```
+
+Pas de seed en production : `content.json` n'existe pas encore, le site démarre avec un
+catalogue vide et l'éditeur crée ses livres depuis `/admin`. Le fichier est créé à la première
+sauvegarde. (`npm run seed` écrirait le catalogue de démonstration — à ne lancer qu'en dev.)
 
 ### Nginx (`/etc/nginx/sites-available/edit`)
 
 ```nginx
 server {
     server_name <domaine>;
-    client_max_body_size 20m;                      # uploads d'images
+    client_max_body_size 20m;                      # uploads d'images (10 Mo par fichier)
 
-    location /uploads/ {                           # fichiers servis par Nginx directement
-        alias /srv/edit/shared/uploads/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
     location /_next/static/ {
         alias /srv/edit/app/.next/static/;
         expires 365d;
@@ -75,6 +77,10 @@ server {
 }
 ```
 
+Il n'y a plus de `location /uploads/` : les images sont servies **dans le HTML** (data URI). Seul
+`/og/<slug>` renvoie une vraie réponse image, pour les crawlers — elle passe par Node, sans
+configuration particulière.
+
 ```bash
 sudo ln -s /etc/nginx/sites-available/edit /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
@@ -84,10 +90,11 @@ sudo certbot --nginx -d <domaine>        # SSL Let's Encrypt + renouvellement au
 ### Backups quotidiens (`crontab -e` en deploy)
 
 ```cron
-0 3 * * * sqlite3 /srv/edit/shared/data/app.db ".backup /srv/edit/backups/app-$(date +\%F).db" && tar -czf /srv/edit/backups/uploads-$(date +\%F).tar.gz -C /srv/edit/shared uploads && find /srv/edit/backups -mtime +30 -delete
+0 3 * * * cp /srv/edit/shared/content.json /srv/edit/backups/content-$(date +\%F).json && find /srv/edit/backups -mtime +30 -delete
 ```
 
-(`sudo apt-get install -y sqlite3` si absent. `.backup` est sûr même base ouverte, grâce au WAL.)
+`cp` suffit et reste sûr même pendant une écriture : l'application écrit dans un fichier `.tmp`
+puis fait un `rename` atomique, donc `content.json` n'est jamais dans un état partiel.
 
 ## 2. Déployer une mise à jour (à chaque release)
 
@@ -95,30 +102,45 @@ sudo certbot --nginx -d <domaine>        # SSL Let's Encrypt + renouvellement au
 cd /srv/edit/app
 git pull
 npm ci
-cp /srv/edit/shared/data/app.db /srv/edit/shared/data/app.db.bak.$(date +%Y%m%d-%H%M%S)
-npm run db:deploy                 # ne fait rien s'il n'y a pas de nouvelle migration
 npm run build
 pm2 reload edit                   # reload sans coupure
 pm2 logs edit --lines 30          # vérifier le démarrage
 ```
 
-Vérification post-déploiement : la home répond en https, login admin OK, une image d'upload
-s'affiche (teste le chemin Nginx /uploads/).
+Aucune migration à jouer, aucune donnée à toucher. Vérification post-déploiement : la home
+répond en https, le login admin fonctionne, une fiche livre affiche sa couverture et se retourne
+au clic.
 
 ## 3. Rollback
 
 ```bash
 cd /srv/edit/app && git log --oneline -5
 git checkout <commit_precedent> && npm ci && npm run build && pm2 reload edit
-# Si une migration était passée : restaurer le backup db (skill db-migrate, section Restauration)
 ```
+
+Les données ne bougeant pas avec le code, un rollback est purement applicatif. Pour restaurer
+un contenu perdu (mauvaise manipulation dans le back office) :
+
+```bash
+pm2 stop edit
+cp /srv/edit/backups/content-<date>.json /srv/edit/shared/content.json
+pm2 start edit          # le cache mémoire est reconstruit au démarrage
+```
+
+Toujours arrêter le process avant de remplacer le fichier à la main : le store le garde en
+mémoire et le réécrirait par-dessus à la prochaine sauvegarde.
 
 ## Notes
 
 - PM2 lance Next directement (`node_modules/next/dist/bin/next start`, voir
-  `ecosystem.config.cjs` à la racine) : simple et suffisant pour un VPS mono-app. Pas de
-  `output: standalone` — le déploiement garde `node_modules` (requis de toute façon par
-  Prisma et le `npm ci` de release).
-- SQLite + uploads vivent dans `/srv/edit/shared/` : un `git pull`/`npm ci` ne peut PAS les
-  détruire.
+  `ecosystem.config.cjs` à la racine) : simple et suffisant pour un VPS mono-app.
+- **`instances: 1` est obligatoire, pas un choix de confort** : le store garde `content.json` en
+  mémoire et sérialise les écritures dans le process. Passer en mode cluster ferait diverger les
+  caches et perdrait des sauvegardes.
+- `max_memory_restart: "400M"` : le contenu entier tient en mémoire. Confortable pour quelques
+  dizaines de livres ; à relever si le catalogue grossit beaucoup.
+- `content.json` vit dans `/srv/edit/shared/` : un `git pull`/`npm ci` ne peut PAS le détruire.
+- Les pages publiques sont rendues à la demande (`force-dynamic`) : un `pm2 restart` ou un
+  reboot **sans** rebuild ne fait perdre aucun livre publié depuis le dernier déploiement.
+  Vérifié en tuant le process et en le relançant : le contenu écrit entre-temps est toujours servi.
 - Surveiller : `pm2 monit`, logs Nginx dans `/var/log/nginx/`.

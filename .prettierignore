@@ -2,4 +2,3 @@ node_modules
 .next
 data
 package-lock.json
-prisma/migrations

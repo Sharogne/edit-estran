@@ -31,8 +31,9 @@
   },
   "project": {
     "publishedOn": "Paru le {date}",
-    "previewsTitle": "Feuilleter quelques pages",
-    "previewAlt": "{title} — page {number}",
+    "flipToBack": "Voir le 4e de couverture",
+    "flipToFront": "Revoir la couverture",
+    "backCoverAlt": "{title} — 4e de couverture",
     "backToList": "Tous les projets"
   },
   "notFound": {

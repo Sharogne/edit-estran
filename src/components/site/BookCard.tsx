@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { uploadSrc } from "@/lib/image-src";
 import { Link } from "@/i18n/navigation";
 import type { PublicBook } from "@/lib/books";
 
@@ -9,15 +8,11 @@ export function BookCard({ book, locale }: { book: PublicBook; locale: string })
     : null;
 
   return (
-    <Link
-      href={`/projets/${book.slug}`}
-      data-cy={`book-card-${book.slug}`}
-      className="group block"
-    >
+    <Link href={`/projets/${book.slug}`} data-cy={`book-card-${book.slug}`} className="group block">
       <div className="relative aspect-2/3 overflow-hidden rounded-sm bg-surface shadow-book">
-        {book.coverImage ? (
+        {book.coverThumb ? (
           <Image
-            src={uploadSrc(book.coverImage)}
+            src={book.coverThumb}
             alt={book.title}
             fill
             sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 280px"

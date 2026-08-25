@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import { uploadSrc } from "@/lib/image-src";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
-import { getPublishedBookBySlug, getPublishedSlugs } from "@/lib/books";
+import { getPublishedBookBySlug } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
+import { BookCoverFlip } from "@/components/site/BookCoverFlip";
 
-export async function generateStaticParams() {
-  const slugs = await getPublishedSlugs();
-  return slugs.map((slug) => ({ slug }));
-}
+// Rendered per request rather than frozen at build time: the content lives in an
+// in-memory JSON store, so a render costs a lookup and no I/O — while a
+// build-time prerender would resurface the catalogue as it was at build after
+// any restart not preceded by a rebuild (crash, reboot, plain pm2 restart).
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -30,9 +30,10 @@ export async function generateMetadata({
       title: book.title,
       description: book.synopsis.slice(0, 200),
       type: "book",
-      // Resolved against metadataBase, which already carries any basePath —
-      // so this one stays a plain path (no uploadSrc) to avoid doubling it.
-      ...(book.coverImage ? { images: [{ url: `/uploads/${book.coverImage}` }] } : {}),
+      // Covers are stored inline as data URIs, which crawlers cannot read — the
+      // /og route decodes one back to a real image response. Plain path: it is
+      // resolved against metadataBase.
+      ...(book.coverImage ? { images: [{ url: `/og/${slug}` }] } : {}),
     },
   };
 }
@@ -60,32 +61,21 @@ export default async function ProjectPage({ params }: PageProps<"/[locale]/proje
         </Link>
 
         <div className="mt-10 grid gap-10 md:grid-cols-[300px_1fr] md:gap-16">
-          {/* Cover */}
+          {/* Cover — click to flip to the back cover */}
           <div>
-            <div className="relative aspect-2/3 overflow-hidden rounded-sm bg-surface shadow-book">
-              {book.coverImage ? (
-                <Image
-                  src={uploadSrc(book.coverImage)}
-                  alt={book.title}
-                  fill
-                  priority
-                  sizes="(max-width: 768px) 80vw, 300px"
-                  className="object-cover"
-                  data-cy="project-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center border border-line p-4">
-                  <span className="font-display text-center text-xl text-ink-muted">
-                    {book.title}
-                  </span>
-                </div>
-              )}
-            </div>
+            <BookCoverFlip
+              title={book.title}
+              coverImage={book.coverImage}
+              backCoverImage={book.backCoverImage}
+            />
           </div>
 
           {/* Texts */}
           <div className="max-w-2xl">
-            <h1 className="font-display text-3xl leading-tight tracking-tight sm:text-4xl" data-cy="project-title">
+            <h1
+              className="font-display text-3xl leading-tight tracking-tight sm:text-4xl"
+              data-cy="project-title"
+            >
               {book.title}
             </h1>
             {publishedDate && (
@@ -98,30 +88,6 @@ export default async function ProjectPage({ params }: PageProps<"/[locale]/proje
             </div>
           </div>
         </div>
-
-        {/* Preview pages */}
-        {book.previewPages.length > 0 && (
-          <section className="mt-20 border-t border-line pt-12" data-cy="project-previews">
-            <h2 className="font-display text-2xl">{t("previewsTitle")}</h2>
-            <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {book.previewPages.map((page, index) => (
-                <div
-                  key={page.id}
-                  className="relative aspect-3/4 overflow-hidden rounded-sm bg-surface shadow-book"
-                  data-cy="project-preview-page"
-                >
-                  <Image
-                    src={uploadSrc(page.imagePath)}
-                    alt={t("previewAlt", { title: book.title, number: index + 1 })}
-                    fill
-                    sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px"
-                    className="object-cover"
-                  />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
       </Container>
     </main>
   );

@@ -20,8 +20,7 @@ async function jpeg(name: string, width: number, height: number, rgb: [number, n
 async function main() {
   await fs.mkdir(outDir, { recursive: true });
   await jpeg("cover-upload.jpg", 800, 1200, [31, 58, 45]);
-  await jpeg("preview-upload-1.jpg", 900, 1200, [236, 240, 241]);
-  await jpeg("preview-upload-2.jpg", 900, 1200, [226, 176, 74]);
+  await jpeg("back-cover-upload.jpg", 800, 1200, [226, 176, 74]);
 }
 
 main();

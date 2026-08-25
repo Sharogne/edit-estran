@@ -2,23 +2,16 @@
   "name": "edit",
   "version": "0.1.0",
   "private": true,
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "postinstall": "prisma generate && node scripts/fix-sharp-wasm.cjs",
+    "postinstall": "node scripts/fix-sharp-wasm.cjs",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio",
-    "demo:build": "node scripts/build-static-demo.mjs",
-    "e2e:seed": "node scripts/reset-test-db.cjs && dotenv -e .env.test -- npx prisma migrate deploy && dotenv -e .env.test -- tsx scripts/seed-e2e.ts",
+    "seed": "tsx scripts/seed-content.ts",
+    "e2e:seed": "dotenv -e .env.test -- tsx scripts/seed-content.ts --e2e",
     "e2e:build": "dotenv -e .env.test -- next build",
     "e2e:start": "dotenv -e .env.test -- next start",
     "e2e:dev": "dotenv -e .env.test -- next dev",
@@ -28,7 +21,6 @@
     "e2e:open": "npm run e2e:seed && start-server-and-test e2e:dev http://localhost:3000 cy:open"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "iron-session": "^8.0.4",
@@ -49,7 +41,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "prettier": "^3.8.4",
-    "prisma": "^6.19.3",
     "start-server-and-test": "^3.0.10",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",

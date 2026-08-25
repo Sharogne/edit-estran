@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Revue de code read-only des changements en cours (diff non commité ou branche) selon les conventions du projet - sécurité admin/uploads, complétude i18n, data-cy, design tokens, migrations. À utiliser avant un commit important ou après une grosse itération.
+description: Revue de code read-only des changements en cours (diff non commité ou branche) selon les conventions du projet - sécurité admin/images, complétude i18n, data-cy, design tokens, intégrité du store. À utiliser avant un commit important ou après une grosse itération.
 tools: Read, Glob, Grep, Bash
 ---
 
@@ -16,17 +16,20 @@ conventions) et passe la checklist ci-dessous sur chaque fichier touché.
 **Sécurité (bloquant)**
 - [ ] Chaque server action de `src/app/admin/**/actions.ts` commence par `await requireAdmin()`.
 - [ ] Toute entrée utilisateur (formulaire, FormData, params) est parsée par un schéma Zod
-      avant usage ; les uploads vérifient type MIME et taille.
-- [ ] Aucun accès filesystem hors `src/lib/uploads.ts` ; aucun chemin construit à partir d'une
-      entrée client sans confinement sous `UPLOADS_DIR` (path traversal).
+      avant usage ; les images uploadées vérifient type MIME et taille.
+- [ ] Aucun accès filesystem hors `src/lib/store.ts` ; aucune image encodée hors
+      `src/lib/images.ts`.
 - [ ] Aucun secret/identifiant en dur (hors `.env.test`, qui est volontairement committé).
-- [ ] Le matcher de `src/proxy.ts` exclut toujours `/admin`, `/api`, `/uploads`.
+- [ ] Le matcher de `src/proxy.ts` exclut toujours `/admin`, `/api`, `/og`.
 
 **Données**
-- [ ] Changement de schéma ⇒ migration nouvelle (jamais d'édition d'une migration appliquée),
-      seeds (`prisma/seed.ts` + `scripts/seed-e2e.ts`) mis à jour.
+- [ ] Changement de forme des données ⇒ champ optionnel/nullable (les `content.json` existants
+      restent valides) ET seed `scripts/lib/seed-books.ts` mis à jour.
+- [ ] Toute écriture passe par `mutateContent()` ; rien ne mute l'objet rendu par `readContent()`.
+- [ ] Dans les littéraux de `createBook`/`updateBook` : aucun spread placé APRÈS une clé
+      explicite qu'il pourrait écraser (bug déjà vécu avec `status`).
 - [ ] Mutations suivies de `revalidatePath` sur les routes publiques concernées.
-- [ ] Pas de `prisma.` direct dans les composants/pages (passe par `src/lib/`).
+- [ ] Pas de `readContent`/`mutateContent` direct dans les composants/pages (passe par `books.ts`).
 
 **i18n**
 - [ ] Toute clé ajoutée existe dans `messages/fr.json` ET `messages/en.json` (compare-les).

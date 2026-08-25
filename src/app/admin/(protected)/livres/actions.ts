@@ -1,23 +1,15 @@
 "use server";
 
+import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma } from "@prisma/client";
 import type { z } from "zod";
-import { prisma } from "@/lib/db";
+import { mutateContent, readContent } from "@/lib/store";
+import type { StoredBook } from "@/lib/content-types";
 import { requireAdmin } from "@/lib/session";
 import { routing } from "@/i18n/routing";
-import {
-  bookFormDataToObject,
-  bookFormSchema,
-  imageFileSchema,
-} from "@/lib/validation/book";
-import {
-  deleteBookUploads,
-  deleteUpload,
-  saveCoverImage,
-  savePreviewImage,
-} from "@/lib/uploads";
+import { bookFormDataToObject, bookFormSchema, imageFileSchema } from "@/lib/validation/book";
+import { BACK_COVER, COVER_FULL, COVER_THUMB, processImage } from "@/lib/images";
 
 export type BookActionState = { error?: string; success?: boolean };
 
@@ -40,29 +32,59 @@ function formatZodError(error: z.ZodError): string {
   return field ? `${field} : ${issue.message}` : issue.message;
 }
 
-function isUniqueViolation(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-}
-
-/** Extracts and validates image files from a FormData field. Throws a user-readable string. */
-function imageFiles(formData: FormData, field: string): File[] {
-  const files = formData
-    .getAll(field)
-    .filter((entry): entry is File => entry instanceof File && entry.size > 0);
-  for (const file of files) {
-    const check = imageFileSchema.safeParse(file);
-    if (!check.success) {
-      throw new ImageValidationError(`${file.name || field} — ${check.error.issues[0].message}`);
-    }
-  }
-  return files;
-}
-
 class ImageValidationError extends Error {}
+class SlugTakenError extends Error {}
+class BookGoneError extends Error {}
+
+const SLUG_TAKEN = "Ce slug est déjà utilisé par un autre livre.";
+const BOOK_GONE = "Livre introuvable.";
+
+/** Reads one optional image out of a FormData field. Throws a user-readable message. */
+function imageFile(formData: FormData, field: string): File | undefined {
+  const entry = formData.get(field);
+  if (!(entry instanceof File) || entry.size === 0) return undefined;
+  const check = imageFileSchema.safeParse(entry);
+  if (!check.success) {
+    throw new ImageValidationError(`${entry.name || field} — ${check.error.issues[0].message}`);
+  }
+  return entry;
+}
+
+type BookImages = Pick<StoredBook, "coverThumb" | "coverImage" | "backCoverImage">;
+
+const NO_IMAGES: BookImages = { coverThumb: null, coverImage: null, backCoverImage: null };
+
+/**
+ * Encodes whichever images were uploaded; fields left empty keep their current
+ * value. Deliberately called OUTSIDE mutateContent: sharp is slow and the write
+ * queue is global, so encoding must not hold it.
+ */
+async function applyImages(
+  current: BookImages,
+  cover: File | undefined,
+  backCover: File | undefined
+): Promise<BookImages> {
+  const next: BookImages = {
+    coverThumb: current.coverThumb,
+    coverImage: current.coverImage,
+    backCoverImage: current.backCoverImage,
+  };
+  if (cover) {
+    // Two variants from the same upload: the thumb keeps list pages light, the
+    // full one is what the book page displays.
+    next.coverThumb = await processImage(cover, COVER_THUMB);
+    next.coverImage = await processImage(cover, COVER_FULL);
+  }
+  if (backCover) {
+    next.backCoverImage = await processImage(backCover, BACK_COVER);
+  }
+  return next;
+}
 
 /** publishedAt defaults to today when publishing without an explicit date. */
-function effectivePublishedAt(status: string, publishedAt: Date | null): Date | null {
-  return status === "published" && !publishedAt ? new Date() : publishedAt;
+function effectivePublishedAt(status: string, publishedAt: Date | null): string | null {
+  const date = status === "published" && !publishedAt ? new Date() : publishedAt;
+  return date ? date.toISOString() : null;
 }
 
 // --- actions ---
@@ -78,44 +100,38 @@ export async function createBook(
   const data = parsed.data;
 
   let cover: File | undefined;
-  let previews: File[];
+  let backCover: File | undefined;
   try {
-    [cover] = imageFiles(formData, "cover");
-    previews = imageFiles(formData, "previews");
+    cover = imageFile(formData, "cover");
+    backCover = imageFile(formData, "backCover");
   } catch (error) {
     if (error instanceof ImageValidationError) return { error: error.message };
     throw error;
   }
 
-  let bookId: string;
+  const images = await applyImages(NO_IMAGES, cover, backCover);
+  const bookId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
   try {
-    const book = await prisma.book.create({
-      data: {
+    await mutateContent((draft) => {
+      // Uniqueness is ours to enforce now that there is no unique index.
+      if (draft.books.some((book) => book.slug === data.slug)) throw new SlugTakenError();
+      draft.books.push({
+        ...images,
+        id: bookId,
         slug: data.slug,
         status: data.status,
         publishedAt: effectivePublishedAt(data.status, data.publishedAt),
         sortOrder: data.sortOrder,
-        translations: {
-          create: [
-            { locale: "fr", ...data.fr },
-            { locale: "en", ...data.en },
-          ],
-        },
-      },
+        createdAt: now,
+        updatedAt: now,
+        translations: { fr: data.fr, en: data.en },
+      });
     });
-    bookId = book.id;
   } catch (error) {
-    if (isUniqueViolation(error)) return { error: "Ce slug est déjà utilisé par un autre livre." };
+    if (error instanceof SlugTakenError) return { error: SLUG_TAKEN };
     throw error;
-  }
-
-  if (cover) {
-    const coverPath = await saveCoverImage(bookId, cover);
-    await prisma.book.update({ where: { id: bookId }, data: { coverImage: coverPath } });
-  }
-  for (const [index, file] of previews.entries()) {
-    const imagePath = await savePreviewImage(bookId, file);
-    await prisma.bookPreviewPage.create({ data: { bookId, imagePath, sortOrder: index } });
   }
 
   revalidatePublic(data.slug);
@@ -129,54 +145,47 @@ export async function updateBook(
   await requireAdmin();
 
   const bookId = String(formData.get("bookId") ?? "");
-  const existing = await prisma.book.findUnique({ where: { id: bookId } });
-  if (!existing) return { error: "Livre introuvable." };
+  const { books } = await readContent();
+  const existing = books.find((book) => book.id === bookId);
+  if (!existing) return { error: BOOK_GONE };
 
   const parsed = bookFormSchema.safeParse(bookFormDataToObject(formData));
   if (!parsed.success) return { error: formatZodError(parsed.error) };
   const data = parsed.data;
 
   let cover: File | undefined;
+  let backCover: File | undefined;
   try {
-    [cover] = imageFiles(formData, "cover");
+    cover = imageFile(formData, "cover");
+    backCover = imageFile(formData, "backCover");
   } catch (error) {
     if (error instanceof ImageValidationError) return { error: error.message };
     throw error;
   }
 
+  const images = await applyImages(existing, cover, backCover);
+
   try {
-    await prisma.book.update({
-      where: { id: bookId },
-      data: {
+    await mutateContent((draft) => {
+      const book = draft.books.find((candidate) => candidate.id === bookId);
+      if (!book) throw new BookGoneError();
+      if (draft.books.some((other) => other.id !== bookId && other.slug === data.slug)) {
+        throw new SlugTakenError();
+      }
+      Object.assign(book, {
+        ...images,
         slug: data.slug,
         status: data.status,
         publishedAt: effectivePublishedAt(data.status, data.publishedAt),
         sortOrder: data.sortOrder,
-        translations: {
-          upsert: [
-            {
-              where: { bookId_locale: { bookId, locale: "fr" } },
-              update: data.fr,
-              create: { locale: "fr", ...data.fr },
-            },
-            {
-              where: { bookId_locale: { bookId, locale: "en" } },
-              update: data.en,
-              create: { locale: "en", ...data.en },
-            },
-          ],
-        },
-      },
+        updatedAt: new Date().toISOString(),
+        translations: { fr: data.fr, en: data.en },
+      } satisfies Partial<StoredBook>);
     });
   } catch (error) {
-    if (isUniqueViolation(error)) return { error: "Ce slug est déjà utilisé par un autre livre." };
+    if (error instanceof SlugTakenError) return { error: SLUG_TAKEN };
+    if (error instanceof BookGoneError) return { error: BOOK_GONE };
     throw error;
-  }
-
-  if (cover) {
-    const coverPath = await saveCoverImage(bookId, cover);
-    await prisma.book.update({ where: { id: bookId }, data: { coverImage: coverPath } });
-    if (existing.coverImage) await deleteUpload(existing.coverImage);
   }
 
   // Old slug too: its public page must drop out if the slug changed.
@@ -189,111 +198,13 @@ export async function deleteBook(formData: FormData): Promise<void> {
   await requireAdmin();
 
   const bookId = String(formData.get("bookId") ?? "");
-  const existing = await prisma.book.findUnique({ where: { id: bookId } });
-  if (!existing) redirect("/admin");
+  const removedSlug = await mutateContent((draft) => {
+    const index = draft.books.findIndex((book) => book.id === bookId);
+    if (index === -1) return undefined;
+    // The images live inside the entry, so they go with it — nothing is left behind.
+    return draft.books.splice(index, 1)[0].slug;
+  });
 
-  await prisma.book.delete({ where: { id: bookId } }); // cascades translations + previews
-  await deleteBookUploads(bookId);
-
-  revalidatePublic(existing.slug);
+  if (removedSlug) revalidatePublic(removedSlug);
   redirect("/admin");
-}
-
-export async function addPreviewPages(
-  _prevState: BookActionState,
-  formData: FormData
-): Promise<BookActionState> {
-  await requireAdmin();
-
-  const bookId = String(formData.get("bookId") ?? "");
-  const book = await prisma.book.findUnique({ where: { id: bookId } });
-  if (!book) return { error: "Livre introuvable." };
-
-  let files: File[];
-  try {
-    files = imageFiles(formData, "previews");
-  } catch (error) {
-    if (error instanceof ImageValidationError) return { error: error.message };
-    throw error;
-  }
-  if (files.length === 0) return { error: "Sélectionnez au moins une image." };
-
-  const last = await prisma.bookPreviewPage.aggregate({
-    where: { bookId },
-    _max: { sortOrder: true },
-  });
-  let nextOrder = (last._max.sortOrder ?? -1) + 1;
-
-  for (const file of files) {
-    const imagePath = await savePreviewImage(bookId, file);
-    await prisma.bookPreviewPage.create({ data: { bookId, imagePath, sortOrder: nextOrder++ } });
-  }
-
-  revalidatePublic(book.slug);
-  revalidatePath(`/admin/livres/${bookId}`);
-  return { success: true };
-}
-
-export async function deletePreviewPage(formData: FormData): Promise<void> {
-  await requireAdmin();
-
-  const previewId = String(formData.get("previewId") ?? "");
-  const preview = await prisma.bookPreviewPage.findUnique({
-    where: { id: previewId },
-    include: { book: { select: { id: true, slug: true } } },
-  });
-  if (!preview) return;
-
-  await prisma.bookPreviewPage.delete({ where: { id: previewId } });
-  await deleteUpload(preview.imagePath);
-
-  // Keep sortOrder dense (0..n-1) so up/down moves stay simple.
-  const remaining = await prisma.bookPreviewPage.findMany({
-    where: { bookId: preview.book.id },
-    orderBy: { sortOrder: "asc" },
-  });
-  await prisma.$transaction(
-    remaining.map((page, index) =>
-      prisma.bookPreviewPage.update({ where: { id: page.id }, data: { sortOrder: index } })
-    )
-  );
-
-  revalidatePublic(preview.book.slug);
-  revalidatePath(`/admin/livres/${preview.book.id}`);
-}
-
-export async function movePreviewPage(formData: FormData): Promise<void> {
-  await requireAdmin();
-
-  const previewId = String(formData.get("previewId") ?? "");
-  const direction = formData.get("direction") === "up" ? -1 : 1;
-
-  const preview = await prisma.bookPreviewPage.findUnique({
-    where: { id: previewId },
-    include: { book: { select: { id: true, slug: true } } },
-  });
-  if (!preview) return;
-
-  const neighbor = await prisma.bookPreviewPage.findFirst({
-    where: {
-      bookId: preview.book.id,
-      sortOrder: direction === -1 ? { lt: preview.sortOrder } : { gt: preview.sortOrder },
-    },
-    orderBy: { sortOrder: direction === -1 ? "desc" : "asc" },
-  });
-  if (!neighbor) return;
-
-  await prisma.$transaction([
-    prisma.bookPreviewPage.update({
-      where: { id: preview.id },
-      data: { sortOrder: neighbor.sortOrder },
-    }),
-    prisma.bookPreviewPage.update({
-      where: { id: neighbor.id },
-      data: { sortOrder: preview.sortOrder },
-    }),
-  ]);
-
-  revalidatePublic(preview.book.slug);
-  revalidatePath(`/admin/livres/${preview.book.id}`);
 }

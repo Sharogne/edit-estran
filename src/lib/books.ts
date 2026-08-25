@@ -1,53 +1,77 @@
-import { prisma } from "@/lib/db";
+import { readContent } from "@/lib/store";
+import type { StoredBook, StoredTranslation } from "@/lib/content-types";
 import type { Locale } from "@/i18n/routing";
 
-// All book reads go through this module (never call prisma from pages/components).
+// All book reads go through this module (never touch the store from pages/components).
+// The store keeps dates as ISO strings; they are turned back into Date objects here
+// so callers keep working with real dates.
 
 export type PublicBook = {
   id: string;
   slug: string;
-  coverImage: string | null;
+  /** Small variant — these types are only ever rendered in list layouts. */
+  coverThumb: string | null;
   publishedAt: Date | null;
   title: string;
   synopsis: string;
 };
 
 export type PublicBookDetail = PublicBook & {
-  previewPages: { id: string; imagePath: string; sortOrder: number }[];
+  coverImage: string | null;
+  backCoverImage: string | null;
 };
 
-type BookWithTranslations = {
-  translations: { locale: string; title: string; synopsis: string }[];
+export type AdminBook = {
+  id: string;
+  slug: string;
+  status: "draft" | "published";
+  publishedAt: Date | null;
+  sortOrder: number;
+  coverThumb: string | null;
+  backCoverImage: string | null;
+  translations: Record<Locale, StoredTranslation>;
 };
 
 /** Picks the requested locale's translation, falling back to French. */
-function pickTranslation(book: BookWithTranslations, locale: Locale) {
-  return (
-    book.translations.find((t) => t.locale === locale) ??
-    book.translations.find((t) => t.locale === "fr") ??
-    book.translations[0]
-  );
+function pickTranslation(book: StoredBook, locale: Locale): StoredTranslation | undefined {
+  return book.translations[locale] ?? book.translations.fr ?? Object.values(book.translations)[0];
 }
 
-const publishedWhere = { status: "published" } as const;
+function toDate(iso: string | null): Date | null {
+  return iso ? new Date(iso) : null;
+}
+
+function time(iso: string | null): number {
+  return iso ? new Date(iso).getTime() : 0;
+}
+
+/** Catalogue order: explicit sortOrder first, most recent publication as tie-break. */
+function byCatalogueOrder(a: StoredBook, b: StoredBook): number {
+  return a.sortOrder - b.sortOrder || time(b.publishedAt) - time(a.publishedAt);
+}
+
+function isPublished(book: StoredBook): boolean {
+  return book.status === "published";
+}
+
+function toPublicBook(book: StoredBook, locale: Locale): PublicBook {
+  const t = pickTranslation(book, locale);
+  return {
+    id: book.id,
+    slug: book.slug,
+    coverThumb: book.coverThumb,
+    publishedAt: toDate(book.publishedAt),
+    title: t?.title ?? book.slug,
+    synopsis: t?.synopsis ?? "",
+  };
+}
 
 export async function getPublishedBooks(locale: Locale): Promise<PublicBook[]> {
-  const books = await prisma.book.findMany({
-    where: publishedWhere,
-    orderBy: [{ sortOrder: "asc" }, { publishedAt: "desc" }],
-    include: { translations: true },
-  });
-  return books.map((book) => {
-    const t = pickTranslation(book, locale);
-    return {
-      id: book.id,
-      slug: book.slug,
-      coverImage: book.coverImage,
-      publishedAt: book.publishedAt,
-      title: t?.title ?? book.slug,
-      synopsis: t?.synopsis ?? "",
-    };
-  });
+  const { books } = await readContent();
+  return books
+    .filter(isPublished)
+    .sort(byCatalogueOrder)
+    .map((book) => toPublicBook(book, locale));
 }
 
 export async function getLatestPublishedBooks(locale: Locale, count: number) {
@@ -61,65 +85,51 @@ export async function getPublishedBookBySlug(
   slug: string,
   locale: Locale
 ): Promise<PublicBookDetail | null> {
-  const book = await prisma.book.findFirst({
-    where: { slug, ...publishedWhere },
-    include: {
-      translations: true,
-      previewPages: { orderBy: { sortOrder: "asc" } },
-    },
-  });
+  const { books } = await readContent();
+  const book = books.find((candidate) => candidate.slug === slug && isPublished(candidate));
   if (!book) return null;
-  const t = pickTranslation(book, locale);
   return {
-    id: book.id,
-    slug: book.slug,
+    ...toPublicBook(book, locale),
     coverImage: book.coverImage,
-    publishedAt: book.publishedAt,
-    title: t?.title ?? book.slug,
-    synopsis: t?.synopsis ?? "",
-    previewPages: book.previewPages,
+    backCoverImage: book.backCoverImage,
   };
 }
 
 /** Slugs of all published books (sitemap + static params). */
 export async function getPublishedSlugs(): Promise<string[]> {
-  const books = await prisma.book.findMany({
-    where: publishedWhere,
-    select: { slug: true },
-  });
-  return books.map((b) => b.slug);
+  const { books } = await readContent();
+  return books.filter(isPublished).map((book) => book.slug);
 }
 
 // --- Admin queries (back office only — callers must have passed requireAdmin) ---
 
 export async function getAllBooksForAdmin() {
-  const books = await prisma.book.findMany({
-    orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
-    include: {
-      translations: true,
-      _count: { select: { previewPages: true } },
-    },
-  });
-  return books.map((book) => ({
+  const { books } = await readContent();
+  return [...books]
+    .sort((a, b) => a.sortOrder - b.sortOrder || time(b.updatedAt) - time(a.updatedAt))
+    .map((book) => ({
+      id: book.id,
+      slug: book.slug,
+      status: book.status,
+      publishedAt: toDate(book.publishedAt),
+      updatedAt: new Date(book.updatedAt),
+      coverThumb: book.coverThumb,
+      title: pickTranslation(book, "fr")?.title ?? book.slug,
+    }));
+}
+
+export async function getBookForAdmin(id: string): Promise<AdminBook | null> {
+  const { books } = await readContent();
+  const book = books.find((candidate) => candidate.id === id);
+  if (!book) return null;
+  return {
     id: book.id,
     slug: book.slug,
     status: book.status,
-    publishedAt: book.publishedAt,
-    updatedAt: book.updatedAt,
-    coverImage: book.coverImage,
-    previewCount: book._count.previewPages,
-    title: pickTranslation(book, "fr")?.title ?? book.slug,
-  }));
+    publishedAt: toDate(book.publishedAt),
+    sortOrder: book.sortOrder,
+    coverThumb: book.coverThumb,
+    backCoverImage: book.backCoverImage,
+    translations: book.translations,
+  };
 }
-
-export async function getBookForAdmin(id: string) {
-  return prisma.book.findUnique({
-    where: { id },
-    include: {
-      translations: true,
-      previewPages: { orderBy: { sortOrder: "asc" } },
-    },
-  });
-}
-
-export type AdminBook = NonNullable<Awaited<ReturnType<typeof getBookForAdmin>>>;

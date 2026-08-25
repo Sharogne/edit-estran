@@ -1,7 +1,6 @@
-import path from "node:path";
-import type { PrismaClient } from "@prisma/client";
-import { uploadsRoot } from "../../src/lib/uploads";
-import { generateCoverImage, generatePreviewImage, type CoverPalette } from "./placeholder-images";
+import { BACK_COVER, COVER_FULL, COVER_THUMB, processImageBuffer } from "../../src/lib/images";
+import type { StoredBook } from "../../src/lib/content-types";
+import { backCoverArtwork, coverArtwork, type CoverPalette } from "./placeholder-images";
 
 export type BookSeedDef = {
   slug: string;
@@ -9,52 +8,36 @@ export type BookSeedDef = {
   publishedAt: Date | null;
   sortOrder: number;
   palette: CoverPalette;
-  previewCount: number;
+  hasBackCover: boolean;
   fr: { title: string; synopsis: string };
   en: { title: string; synopsis: string };
 };
 
 /**
- * Creates (or recreates) a seeded book: row, translations, generated cover
- * and preview images written under UPLOADS_DIR/books/<id>/.
- * Deleting by slug first makes the seed idempotent without touching other books.
+ * Builds one complete stored book, images included.
+ * The id is derived from the slug so a re-seed produces the same entry (and the
+ * same /admin/livres/<id> URLs the e2e specs navigate to), and the artwork runs
+ * through the very same encoder the back office uses for real uploads.
  */
-export async function seedBook(prisma: PrismaClient, def: BookSeedDef): Promise<void> {
-  await prisma.book.deleteMany({ where: { slug: def.slug } });
+export async function buildStoredBook(def: BookSeedDef): Promise<StoredBook> {
+  const cover = coverArtwork(def.palette);
+  const now = new Date().toISOString();
 
-  const book = await prisma.book.create({
-    data: {
-      slug: def.slug,
-      status: def.status,
-      publishedAt: def.publishedAt,
-      sortOrder: def.sortOrder,
-      translations: {
-        create: [
-          { locale: "fr", ...def.fr },
-          { locale: "en", ...def.en },
-        ],
-      },
-    },
-  });
-
-  const root = uploadsRoot();
-  const coverRelative = path.posix.join("books", book.id, "cover.webp");
-  await generateCoverImage(path.join(root, "books", book.id, "cover.webp"), def.palette);
-
-  const previews: { imagePath: string; sortOrder: number }[] = [];
-  for (let i = 0; i < def.previewCount; i++) {
-    const fileName = `preview-${i + 1}.webp`;
-    await generatePreviewImage(path.join(root, "books", book.id, fileName), i + 1);
-    previews.push({ imagePath: path.posix.join("books", book.id, fileName), sortOrder: i });
-  }
-
-  await prisma.book.update({
-    where: { id: book.id },
-    data: {
-      coverImage: coverRelative,
-      previewPages: { create: previews },
-    },
-  });
+  return {
+    id: `seed-${def.slug}`,
+    slug: def.slug,
+    status: def.status,
+    coverThumb: await processImageBuffer(cover, COVER_THUMB),
+    coverImage: await processImageBuffer(cover, COVER_FULL),
+    backCoverImage: def.hasBackCover
+      ? await processImageBuffer(backCoverArtwork(def.palette), BACK_COVER)
+      : null,
+    publishedAt: def.publishedAt ? def.publishedAt.toISOString() : null,
+    sortOrder: def.sortOrder,
+    createdAt: now,
+    updatedAt: now,
+    translations: { fr: def.fr, en: def.en },
+  };
 }
 
 /** Shared demo catalogue — e2e uses the first three (deterministic), dev seeds all. */
@@ -65,7 +48,7 @@ export const demoBooks: BookSeedDef[] = [
     publishedAt: new Date("2025-03-14"),
     sortOrder: 1,
     palette: { bg: "#1f3a2d", band: "#e9e2d0", accent: "#c47a4a" },
-    previewCount: 3,
+    hasBackCover: true,
     fr: {
       title: "Les Jardins suspendus",
       synopsis:
@@ -83,7 +66,7 @@ export const demoBooks: BookSeedDef[] = [
     publishedAt: new Date("2025-10-03"),
     sortOrder: 2,
     palette: { bg: "#2c3e50", band: "#ecf0f1", accent: "#e2b04a" },
-    previewCount: 3,
+    hasBackCover: true,
     fr: {
       title: "Cartographie du silence",
       synopsis:
@@ -101,7 +84,7 @@ export const demoBooks: BookSeedDef[] = [
     publishedAt: null,
     sortOrder: 3,
     palette: { bg: "#8a8276", band: "#f4f1ea", accent: "#42594e" },
-    previewCount: 1,
+    hasBackCover: false,
     fr: {
       title: "Manuscrit inachevé",
       synopsis:
@@ -119,7 +102,7 @@ export const demoBooks: BookSeedDef[] = [
     publishedAt: new Date("2026-01-22"),
     sortOrder: 4,
     palette: { bg: "#3b3a5d", band: "#efe9e1", accent: "#b85c6e" },
-    previewCount: 2,
+    hasBackCover: true,
     fr: {
       title: "L'Heure bleue",
       synopsis:

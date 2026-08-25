@@ -39,7 +39,7 @@ L'admin utilise les mêmes tokens (pas de second thème à maintenir).
 
 1. Aucune couleur/valeur en dur dans un composant : nouvelle couleur ⇒ nouveau token d'abord.
 2. Ne jamais supprimer/renommer un `data-cy` (les tests e2e reposent dessus).
-3. Ne pas toucher à la logique (`src/lib/`, `actions.ts`, `prisma/`) pendant une itération design.
+3. Ne pas toucher à la logique (`src/lib/`, `actions.ts`) pendant une itération design.
 4. Contraste AA : 4.5:1 texte courant, 3:1 grands titres. Focus visible stylé partout.
 5. Tester visuellement : mobile ~375px ET desktop ≥1280px, FR ET EN, états vides
    (livre sans cover, liste vide).
