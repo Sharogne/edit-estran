@@ -30,7 +30,7 @@ describe("CRUD livre (admin)", () => {
     cy.get("[data-cy=book-form-synopsis-en]").type(
       "A test synopsis written by Cypress, long enough to feel realistic."
     );
-    cy.get("[data-cy=book-form-status]").select("published");
+    cy.get("[data-cy=book-form-status]").check();
 
     cy.get("[data-cy=book-form-cover]").selectFile("cypress/fixtures/cover-upload.jpg");
     cy.get("[data-cy=book-form-back-cover]").selectFile("cypress/fixtures/back-cover-upload.jpg");
@@ -39,7 +39,7 @@ describe("CRUD livre (admin)", () => {
 
     // Redirection vers la page d'édition du livre créé (id = uuid). Timeout long
     // assumé : sharp encode trois variantes avant que l'action ne réponde.
-    cy.url({ timeout: 30000 }).should("match", /\/admin\/livres\/[a-z0-9-]+$/);
+    cy.attendCreation();
     cy.get("[data-cy=admin-edit-title]").should("contain", TITLE_FR);
     cy.get("[data-cy=status-badge]").should("have.attr", "data-status", "published");
     cy.get("[data-cy=book-form-current-cover]").should("be.visible");
@@ -99,18 +99,27 @@ describe("CRUD livre (admin)", () => {
       });
   });
 
-  it("dépublie le livre : il disparaît du site public", () => {
+  it("refuse de dépublier : la publication est à sens unique", () => {
     cy.visit("/admin");
     cy.get(`[data-cy=admin-book-row-${SLUG}]`).click();
-    cy.get("[data-cy=book-form-status]").select("draft");
+
+    // Le formulaire ne propose plus la marche arrière…
+    cy.get("[data-cy=book-form-status-publie]").should("contain", "définitif");
+    cy.get("[data-cy=book-form-status]").should("not.be.visible");
+
+    // …et le contourner ne sert à rien : c'est le serveur qui tient la règle.
+    // Sans ce garde-fou, enregistrer deux fois d'affilée dépubliait puis
+    // republiait le livre à l'insu de l'éditeur.
+    cy.get("[data-cy=book-form-status]").invoke("val", "draft");
     cy.get("[data-cy=book-form-submit]").click();
     cy.get("[data-cy=book-form-success]").should("be.visible");
 
-    cy.request({ url: `/fr/projets/${SLUG}`, failOnStatusCode: false })
-      .its("status")
-      .should("eq", 404);
+    cy.storedBook(SLUG).should((livre) => {
+      expect(livre!.status, "un livre publié le reste").to.eq("published");
+    });
+    cy.request(`/fr/projets/${SLUG}`).its("status").should("eq", 200);
     cy.visit("/fr/projets");
-    cy.get(`[data-cy=book-card-${SLUG}]`).should("not.exist");
+    cy.get(`[data-cy=book-card-${SLUG}]`).should("exist");
   });
 
   it("supprime le livre définitivement", () => {

@@ -13,8 +13,8 @@ const TITRE = "Cy Store";
  *  attrapé un spread qui recopiait le livre entier dans la mise à jour. */
 const CHAMPS_ATTENDUS = [
   "backCoverImage",
+  "coverCard",
   "coverImage",
-  "coverThumb",
   "createdAt",
   "id",
   "publishedAt",
@@ -36,13 +36,13 @@ function creerLivre(titre: string, avecVerso: boolean) {
   cy.get("[data-cy=book-form-synopsis-fr]").type("Synopsis FR pour vérifier le stockage.");
   cy.get("[data-cy=book-form-title-en]").type(`${titre} (EN)`);
   cy.get("[data-cy=book-form-synopsis-en]").type("EN synopsis to check what gets stored.");
-  cy.get("[data-cy=book-form-status]").select("published");
+  cy.get("[data-cy=book-form-status]").check();
   cy.get("[data-cy=book-form-cover]").selectFile("cypress/fixtures/cover-upload.jpg");
   if (avecVerso) {
     cy.get("[data-cy=book-form-back-cover]").selectFile("cypress/fixtures/back-cover-upload.jpg");
   }
   cy.get("[data-cy=book-form-submit]").click();
-  cy.url({ timeout: 30000 }).should("match", /\/admin\/livres\/[a-z0-9-]+$/);
+  cy.attendCreation();
 }
 
 describe("Contenu réellement stocké", () => {
@@ -72,14 +72,21 @@ describe("Contenu réellement stocké", () => {
       expect(book.publishedAt, "date de parution posée à la publication").to.be.a("string");
       expect(book.titles).to.deep.equal({ fr: TITRE, en: `${TITRE} (EN)` });
 
-      for (const variante of ["coverThumb", "coverImage", "backCoverImage"] as const) {
+      for (const variante of ["coverCard", "coverImage", "backCoverImage"] as const) {
         const image = book[variante];
         expect(image, variante).to.not.equal(null);
         expect(image!.prefix, `${variante} est une data URI WebP`).to.eq("data:image/webp;base64,");
         expect(image!.bytes, `${variante} sous le plafond`).to.be.at.most(MAX_STORED_BYTES);
+
+        // Le cadrage se décide à l'encodage, plus dans le CSS : c'est le fichier
+        // stocké qui doit être au format 2:3, sinon `object-cover` se remet à
+        // rogner arbitrairement ce que l'éditeur n'a jamais vu.
+        expect(image!.size, `${variante} : en-tête WebP lisible`).to.not.equal(null);
+        const { width, height } = image!.size!;
+        expect(width / height, `${variante} stocké au format 2:3`).to.be.closeTo(2 / 3, 0.01);
       }
-      // la miniature des listes doit rester nettement plus légère que la pleine taille
-      expect(book.coverThumb!.bytes).to.be.lessThan(book.coverImage!.bytes);
+      // la variante des listes reste nettement plus légère que la pleine taille
+      expect(book.coverCard!.bytes).to.be.lessThan(book.coverImage!.bytes);
     });
   });
 
@@ -120,7 +127,7 @@ describe("Contenu réellement stocké", () => {
         );
         // Régression connue : un spread mal placé recopiait tout l'ancien livre.
         expect(final.coverImage!.bytes).to.eq(initial.coverImage!.bytes);
-        expect(final.coverThumb!.bytes).to.eq(initial.coverThumb!.bytes);
+        expect(final.coverCard!.bytes).to.eq(initial.coverCard!.bytes);
         expect(final.backCoverImage!.bytes).to.eq(initial.backCoverImage!.bytes);
         expect(final.status).to.eq(initial.status);
         expect(final.slug).to.eq(initial.slug);

@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/config/uploads";
+import {
+  MAX_PURCHASE_URL_CHARS,
+  MAX_SYNOPSIS_CHARS,
+  MAX_TITLE_CHARS,
+} from "@/config/content-limits";
 
 // Single source of truth for book form constraints (used by all server actions).
 
@@ -7,8 +12,14 @@ import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/config/uploads";
 // (voir resolveField dans src/lib/books.ts). L'exigence porte donc sur
 // l'ENSEMBLE des locales, pas sur chacune — d'où le superRefine plus bas.
 const localeContentSchema = z.object({
-  title: z.string().trim().max(200, "Titre trop long"),
-  synopsis: z.string().trim().max(5000, "Synopsis trop long (5000 caractères max)"),
+  title: z
+    .string()
+    .trim()
+    .max(MAX_TITLE_CHARS, `Titre trop long (${MAX_TITLE_CHARS} caractères max)`),
+  synopsis: z
+    .string()
+    .trim()
+    .max(MAX_SYNOPSIS_CHARS, `Synopsis trop long (${MAX_SYNOPSIS_CHARS} caractères max)`),
 });
 
 const bookFormBaseSchema = z.object({
@@ -24,7 +35,7 @@ const bookFormBaseSchema = z.object({
   purchaseUrl: z
     .string()
     .trim()
-    .max(500, "Lien trop long")
+    .max(MAX_PURCHASE_URL_CHARS, `Lien trop long (${MAX_PURCHASE_URL_CHARS} caractères max)`)
     .refine((valeur) => {
       if (valeur === "") return true;
       try {

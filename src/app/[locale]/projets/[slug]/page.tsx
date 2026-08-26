@@ -14,6 +14,22 @@ import { BookCoverFlip } from "@/components/site/BookCoverFlip";
 // any restart not preceded by a rebuild (crash, reboot, plain pm2 restart).
 export const dynamic = "force-dynamic";
 
+/**
+ * Extrait pour les métadonnées, coupé sur un mot.
+ *
+ * Une coupe brute au caractère produit des résumés de moteur de recherche qui
+ * s'arrêtent en plein milieu d'un mot — c'est le premier aperçu que le lecteur
+ * a du livre, autant qu'il se termine proprement.
+ */
+function extrait(texte: string, max: number): string {
+  if (texte.length <= max) return texte;
+  const coupe = texte.slice(0, max);
+  const dernierEspace = coupe.lastIndexOf(" ");
+  // Un texte sans espace dans la fenêtre (langue non segmentée, URL) : on garde
+  // la coupe brute plutôt que de renvoyer une chaîne vide.
+  return `${(dernierEspace > 0 ? coupe.slice(0, dernierEspace) : coupe).trimEnd()}…`;
+}
+
 export async function generateMetadata({
   params,
 }: PageProps<"/[locale]/projets/[slug]">): Promise<Metadata> {
@@ -22,14 +38,14 @@ export async function generateMetadata({
   if (!book) return {};
   return {
     title: book.title,
-    description: book.synopsis.slice(0, 160),
+    description: extrait(book.synopsis, 160),
     alternates: {
       canonical: `/${locale}/projets/${slug}`,
       languages: { fr: `/fr/projets/${slug}`, en: `/en/projets/${slug}` },
     },
     openGraph: {
       title: book.title,
-      description: book.synopsis.slice(0, 200),
+      description: extrait(book.synopsis, 200),
       type: "book",
       // Covers are stored inline as data URIs, which crawlers cannot read — the
       // /og route decodes one back to a real image response. Plain path: it is

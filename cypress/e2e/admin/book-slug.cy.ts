@@ -34,9 +34,9 @@ function creer(options: {
   if (options.titreFr) cy.get("[data-cy=book-form-title-fr]").type(options.titreFr);
   if (options.titreEn) cy.get("[data-cy=book-form-title-en]").type(options.titreEn);
   cy.get("[data-cy=book-form-synopsis-fr]").type(options.synopsis ?? "Synopsis de contrôle.");
-  if (options.publier) cy.get("[data-cy=book-form-status]").select("published");
+  if (options.publier) cy.get("[data-cy=book-form-status]").check();
   cy.get("[data-cy=book-form-submit]").click();
-  cy.url({ timeout: 30000 }).should("match", /\/admin\/livres\/[a-z0-9-]+$/);
+  cy.attendCreation();
 }
 
 describe("Adresse publique dérivée du titre", () => {
@@ -116,8 +116,8 @@ describe("Adresse publique dérivée du titre", () => {
 
     // Refus : on ne doit pas se retrouver en « publié » à son insu.
     cy.on("window:confirm", () => false);
-    cy.get("[data-cy=book-form-status]").select("published");
-    cy.get("[data-cy=book-form-status]").should("have.value", "draft");
+    cy.get("[data-cy=book-form-status]").click();
+    cy.get("[data-cy=book-form-status]").should("not.be.checked");
   });
 
   it("nomme le livre et la conséquence dans la confirmation", () => {
@@ -130,7 +130,7 @@ describe("Adresse publique dérivée du titre", () => {
 
     cy.visit("/admin/livres/nouveau");
     cy.get("[data-cy=book-form-title-fr]").type(CONFIRMATION);
-    cy.get("[data-cy=book-form-status]").select("published");
+    cy.get("[data-cy=book-form-status]").click();
 
     cy.wrap(null).should(() => {
       const message = vus.join(" ");

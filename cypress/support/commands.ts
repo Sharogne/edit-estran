@@ -1,5 +1,13 @@
 // Custom commands — keep this file small and documented (skill: run-e2e).
 
+/** Ce que la tâche `storedBook` sait dire d'une image stockée, sans la transporter. */
+export type ImageProbe = {
+  prefix: string;
+  bytes: number;
+  /** Dimensions réelles, ou null si l'en-tête WebP n'a pas pu être lu. */
+  size: { width: number; height: number } | null;
+};
+
 /** Light-weight projection of a stored book, returned by the `storedBook` task. */
 export type StoredBookProbe = {
   id: string;
@@ -9,9 +17,9 @@ export type StoredBookProbe = {
   publishedAt: string | null;
   purchaseUrl: string | null;
   fields: string[];
-  coverThumb: { prefix: string; bytes: number } | null;
-  coverImage: { prefix: string; bytes: number } | null;
-  backCoverImage: { prefix: string; bytes: number } | null;
+  coverCard: ImageProbe | null;
+  coverImage: ImageProbe | null;
+  backCoverImage: ImageProbe | null;
   titles: { fr: string | null; en: string | null };
 };
 
@@ -29,6 +37,8 @@ declare global {
       removeBookIfPresent(slug: string): Chainable<void>;
       /** Reads a book out of content.json (null when absent). Retries under `.should()`. */
       storedBook(slug: string): Chainable<StoredBookProbe | null>;
+      /** Attend la redirection qui suit une création de livre réussie. */
+      attendCreation(): Chainable<void>;
     }
   }
 }
@@ -71,6 +81,25 @@ Cypress.Commands.add("removeBookIfPresent", (slug: string) => {
 
 Cypress.Commands.add("storedBook", (slug: string) => {
   return cy.task<StoredBookProbe | null>("storedBook", slug);
+});
+
+/**
+ * Attend la redirection qui suit une création réussie, en exigeant l'ID du livre.
+ *
+ * Le motif large `/admin/livres/[a-z0-9-]+` semblait faire l'affaire, mais
+ * `/admin/livres/nouveau` le satisfait aussi : l'assertion passait SANS RIEN
+ * ATTENDRE, et la lecture de `content.json` qui suit tombait sur un fichier que
+ * la server action n'avait pas fini d'écrire — sharp encode plusieurs variantes
+ * avant de répondre. La course se jouait au hasard de la machine ; exiger un
+ * UUID la supprime.
+ *
+ * Timeout long assumé : c'est l'encodage des images qu'on attend.
+ */
+Cypress.Commands.add("attendCreation", () => {
+  cy.url({ timeout: 30000 }).should(
+    "match",
+    /\/admin\/livres\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+  );
 });
 
 export {};

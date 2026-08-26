@@ -16,7 +16,7 @@ import {
   reorderSchema,
 } from "@/lib/validation/book";
 import type { ImageVariant } from "@/lib/images";
-import { BACK_COVER, COVER_FULL, COVER_THUMB, processImage } from "@/lib/images";
+import { BACK_COVER, COVER_CARD, COVER_FULL, processImage } from "@/lib/images";
 
 export type BookActionState = { error?: string; success?: boolean };
 
@@ -70,13 +70,31 @@ function slugDepuisTitre(
 }
 
 /**
- * Un slug ne suit le titre que TANT QUE le livre n'a jamais été publié.
+ * Un slug ne suit le titre que TANT QUE le livre n'est pas publié.
  * Une fois l'adresse publique diffusée (partage, favori, indexation), la
  * régénérer casserait ces liens en silence — et l'éditeur n'a plus de champ où
- * s'en apercevoir. `publishedAt` non nul signe un livre déjà rendu public.
+ * s'en apercevoir.
+ *
+ * C'est `status` qui fait foi, et non `publishedAt` : la date de parution est un
+ * champ éditorial librement saisi, et s'en servir figeait le titre d'un
+ * brouillon qui n'a jamais été en ligne. La publication étant à sens unique
+ * (cf. statutApresEdition), « publié » vaut bien « a été rendu public ».
  */
-function slugFige(livre: { publishedAt: string | null }): boolean {
-  return livre.publishedAt !== null;
+function slugFige(livre: { status: string }): boolean {
+  return livre.status === "published";
+}
+
+/**
+ * La publication est à SENS UNIQUE : un livre en ligne ne redevient pas un
+ * brouillon, on le retire en le supprimant. Le formulaire ne propose plus la
+ * marche arrière, mais c'est ICI que la règle tient — comme pour le slug figé,
+ * le formulaire n'est qu'une aide à la saisie.
+ */
+function statutApresEdition(
+  livre: { status: string },
+  demande: "draft" | "published"
+): "draft" | "published" {
+  return livre.status === "published" ? "published" : demande;
 }
 
 /** Reads one optional image out of a FormData field. Throws a user-readable message. */
@@ -115,9 +133,9 @@ async function encoder(file: File, variant: ImageVariant): Promise<string> {
   }
 }
 
-type BookImages = Pick<StoredBook, "coverThumb" | "coverImage" | "backCoverImage">;
+type BookImages = Pick<StoredBook, "coverCard" | "coverImage" | "backCoverImage">;
 
-const NO_IMAGES: BookImages = { coverThumb: null, coverImage: null, backCoverImage: null };
+const NO_IMAGES: BookImages = { coverCard: null, coverImage: null, backCoverImage: null };
 
 /**
  * Encodes whichever images were uploaded; fields left empty keep their current
@@ -130,14 +148,14 @@ async function applyImages(
   backCover: File | undefined
 ): Promise<BookImages> {
   const next: BookImages = {
-    coverThumb: current.coverThumb,
+    coverCard: current.coverCard,
     coverImage: current.coverImage,
     backCoverImage: current.backCoverImage,
   };
   if (cover) {
-    // Two variants from the same upload: the thumb keeps list pages light, the
-    // full one is what the book page displays.
-    next.coverThumb = await encoder(cover, COVER_THUMB);
+    // Deux variantes du même envoi : la carte pour les listes, la grande pour la
+    // fiche du livre. Les deux sont recadrées au format 2:3 par l'encodeur.
+    next.coverCard = await encoder(cover, COVER_CARD);
     next.coverImage = await encoder(cover, COVER_FULL);
   }
   if (backCover) {
@@ -201,6 +219,7 @@ export async function createBook(
   });
 
   revalidatePublic(slug);
+  revalidatePath("/admin");
   redirect(`/admin/livres/${bookId}`);
 }
 
@@ -241,11 +260,12 @@ export async function updateBook(
         : slugDepuisTitre(data, (candidat) =>
             draft.books.some((autre) => autre.id !== bookId && autre.slug === candidat)
           );
+      const statut = statutApresEdition(book, data.status);
       Object.assign(book, {
         ...images,
         slug: nouveauSlug,
-        status: data.status,
-        publishedAt: effectivePublishedAt(data.status, data.publishedAt),
+        status: statut,
+        publishedAt: effectivePublishedAt(statut, data.publishedAt),
         purchaseUrl: data.purchaseUrl,
         updatedAt: new Date().toISOString(),
         translations: { fr: data.fr, en: data.en },
@@ -259,6 +279,7 @@ export async function updateBook(
   // Old slug too: its public page must drop out if the slug changed.
   revalidatePublic(existing.slug, nouveauSlug);
   revalidatePath(`/admin/livres/${bookId}`);
+  revalidatePath("/admin");
   return { success: true };
 }
 
@@ -274,6 +295,7 @@ export async function deleteBook(formData: FormData): Promise<void> {
   });
 
   if (removedSlug) revalidatePublic(removedSlug);
+  revalidatePath("/admin");
   redirect("/admin");
 }
 

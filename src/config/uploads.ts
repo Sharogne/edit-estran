@@ -7,6 +7,15 @@
  * server actions des limites annoncées à l'éditeur, au lieu de les recopier.
  */
 
+/**
+ * Format de toutes les couvertures : 2:3, celui d'un livre broché.
+ *
+ * Vit ici plutôt que dans src/lib/images.ts parce que le formulaire s'en sert
+ * pour annoncer le rognage AVANT l'envoi, et qu'un composant client ne peut pas
+ * importer le module d'encodage — il embarque sharp.
+ */
+export const COVER_RATIO = 2 / 3;
+
 /** Poids maximal d'UN fichier déposé. */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 Mo
 

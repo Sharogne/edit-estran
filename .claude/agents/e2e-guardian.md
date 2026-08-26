@@ -28,7 +28,8 @@ l'orchestration exacte, et `cypress/support/` pour les commandes existantes (`cy
 ```
 cypress/e2e/public/   home, projects, project-detail (+404, a11y), i18n (parité fr/en), seo
 cypress/e2e/admin/    auth, book-crud (cycle complet), book-validation (règles), content-store
-cypress/fixtures/     images de test (cover-upload.jpg, back-cover-upload.jpg)
+cypress/fixtures/     images de test (cover-upload.jpg et back-cover-upload.jpg en 2:3,
+                      cover-paysage.jpg pour l'avertissement de rognage)
 cypress/support/      commands.ts (cy.login, cy.removeBookIfPresent, cy.storedBook), e2e.ts
 ```
 

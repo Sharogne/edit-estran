@@ -2,12 +2,20 @@
 // `npm run e2e`. Lancement dédié : `npm run perf` (seed de 50 livres + build +
 // run). Voir le skill `run-e2e`, section « Test de charge ».
 //
-// Pourquoi ce test existe : cette variante inline les images dans le HTML. Le
-// risque n'est donc pas la base de données, c'est le POIDS DE LA PAGE. Une
-// erreur d'une ligne — servir `coverImage` (900 px) au lieu de `coverThumb`
-// (320 px) dans les listes — multiplierait le poids par ~8 sans qu'aucun test
-// fonctionnel ne bronche. C'est précisément ce que les budgets ci-dessous
-// attrapent.
+// Pourquoi ce test existe : les images de cette variante vivent dans un fichier
+// JSON, pas sur un disque. Le risque n'a jamais été la base de données, c'est le
+// POIDS DE LA PAGE.
+//
+// Il a changé de nature. Les couvertures étaient inlinées dans le HTML : chaque
+// image y apparaissait deux fois (balise `<img>` et charge utile RSC), la liste
+// pesait ~1,6 Mo à 50 livres, et ni le cache navigateur ni le chargement différé
+// n'étaient possibles. Elles passent maintenant par /media, qui les décode à la
+// volée depuis le contenu déjà en mémoire.
+//
+// L'assertion qui a des dents est donc devenue : AUCUNE data URI dans le HTML.
+// Une régression d'une ligne — repasser une image stockée à un composant au lieu
+// de son URL — ramènerait tout le poids d'un coup, sans qu'aucun test
+// fonctionnel ne bronche.
 //
 // Le seed de charge utilise des images à entropie photographique : l'artwork
 // géométrique des autres seeds se compresse ~15 fois mieux qu'une vraie
@@ -22,64 +30,39 @@ const NB_PUBLIES = NB_LIVRES + 2;
  * gardent de la marge pour ne pas rougir sur une machine plus lente.
  */
 const BUDGET = {
-  /** Poids total du HTML de la liste, en Ko. Mesuré : ~1600. */
-  listeKo: 2500,
-  /**
-   * Poids image DISTINCT par livre sur la liste, en Ko. Mesuré : ~14.
-   * L'assertion qui a des dents : servir `coverImage` (900 px) au lieu de
-   * `coverThumb` (320 px) ferait passer ce chiffre à ~115.
-   */
-  imageParLivreKo: 40,
-  /**
-   * Apparitions de chaque data URI dans le HTML. Mesuré : 2 — une dans le
-   * `<img src>`, une dans la charge utile RSC que Next embarque pour
-   * l'hydratation. C'est le prix, documenté, de l'inline : la moitié du poids
-   * image de la page est un doublon. Ce budget alerte si ça empire.
-   */
-  occurrencesParImage: 2,
-  /** Réponse serveur de la liste (rendu dynamique + lecture mémoire), en ms. Mesuré : ~210. */
+  /** Poids du HTML de la liste, en Ko. Mesuré : ~99 (~1600 quand les images y étaient). */
+  listeKo: 250,
+  /** Poids du HTML d'une fiche, en Ko. Mesuré : ~22 (~580 avant). */
+  ficheKo: 80,
+  /** Poids du tableau de bord admin (50 vignettes), en Ko. Mesuré : ~95 (~1630 avant). */
+  adminKo: 250,
+  /** Réponse serveur de la liste (rendu dynamique + lecture mémoire), en ms. Mesuré : ~92. */
   listeTtfbMs: 1500,
-  /** Poids du HTML d'une fiche (recto + verso 900 px inline), en Ko. Mesuré : ~580. */
-  ficheKo: 900,
-  /**
-   * Apparitions de chaque image sur une fiche. Mesuré : 3 pour la couverture —
-   * `<img src>`, charge RSC, et un `<link rel="preload">` produit par la prop
-   * `priority` de next/image. Précharger une data URI ne sert à rien : les
-   * octets sont déjà dans le document. Retirer `priority` de BookCoverFlip
-   * économiserait ~110 Ko par fiche.
-   */
-  occurrencesFiche: 3,
-  /** Réponse serveur d'une fiche, en ms. Mesuré : ~70. */
+  /** Réponse serveur d'une fiche, en ms. Mesuré : ~26. */
   ficheTtfbMs: 1000,
-  /** Chargement complet dans le navigateur, en ms. Mesuré : ~500. */
+  /** Réponse de /media : décodage base64 d'une image déjà en mémoire, en ms. Mesuré : ~28. */
+  mediaTtfbMs: 800,
+  /** Poids d'une variante carte servie par /media, en Ko. Mesuré : ~42. */
+  carteKo: 90,
+  /** Poids d'une variante pleine taille, en Ko. Mesuré : ~81. */
+  couvertureKo: 180,
+  /** Chargement complet dans le navigateur, en ms. Mesuré : ~402. */
   chargementMs: 5000,
-  /** Plus longue tâche bloquante pendant le défilement, en ms. Mesuré : ~140. */
+  /** Plus longue tâche bloquante pendant le défilement, en ms. Mesuré : ~99. */
   longueTacheMs: 500,
-  /** Poids du tableau de bord admin (50 vignettes), en Ko. Mesuré : ~1630. */
-  adminKo: 2500,
 };
 
 const ko = (octets: number) => Math.round(octets / 1024);
-
-/** Décompose la part « images » d'une réponse HTML, doublons compris. */
-function analyseImages(html: string) {
-  const uris = html.match(/data:image\/webp;base64,[A-Za-z0-9+/=]+/g) ?? [];
-  const distinctes = new Set(uris);
-  const total = uris.reduce((somme, uri) => somme + uri.length, 0);
-  const distinct = [...distinctes].reduce((somme, uri) => somme + uri.length, 0);
-  return {
-    totalKo: ko(total),
-    distinctKo: ko(distinct),
-    doublonKo: ko(total - distinct),
-    occurrences: distinctes.size ? uris.length / distinctes.size : 0,
-    nombre: distinctes.size,
-  };
-}
 
 const mesures: string[] = [];
 function noter(libelle: string, valeur: string) {
   mesures.push(`${libelle.padEnd(34)} ${valeur}`);
   cy.log(`**${libelle}** : ${valeur}`);
+}
+
+/** Les URLs /media distinctes citées par une réponse HTML. */
+function urlsMedia(html: string): string[] {
+  return [...new Set(html.match(/\/media\/[^"'\\ ]+\.webp/g) ?? [])];
 }
 
 describe(`Charge du catalogue (${NB_LIVRES} livres)`, () => {
@@ -102,25 +85,66 @@ describe(`Charge du catalogue (${NB_LIVRES} livres)`, () => {
     });
   });
 
-  it("sert la liste des projets dans son budget de poids et de temps", () => {
+  it("sert la liste des projets sans une seule image dans le HTML", () => {
     cy.request("/fr/projets").then((reponse) => {
       const totalKo = ko(reponse.body.length);
-      const img = analyseImages(reponse.body);
-      const parLivre = img.distinctKo / img.nombre;
+      const images = urlsMedia(reponse.body);
 
       noter("Liste — HTML total", `${totalKo} Ko`);
-      noter("Liste — images distinctes", `${img.distinctKo} Ko sur ${img.nombre} images`);
-      noter("Liste — doublons RSC", `+${img.doublonKo} Ko`);
-      noter("Liste — image par livre", `${parLivre.toFixed(1)} Ko`);
+      noter("Liste — images citées", `${images.length}`);
       noter("Liste — réponse serveur", `${reponse.duration} ms`);
 
-      expect(img.nombre, "une miniature par livre publié").to.eq(NB_PUBLIES);
+      // LE garde-fou : une image inlinée est une image qu'aucun cache ne peut
+      // reprendre, et qui pèse deux fois (HTML + charge RSC).
+      expect(reponse.body, "aucune image inlinée dans le HTML").to.not.contain("data:image/");
+      expect(images, "une carte par livre publié").to.have.length(NB_PUBLIES);
       expect(totalKo, "poids total de la liste").to.be.lessThan(BUDGET.listeKo);
-      expect(parLivre, "poids image par livre").to.be.lessThan(BUDGET.imageParLivreKo);
-      expect(img.occurrences, "apparitions de chaque image dans le HTML").to.be.at.most(
-        BUDGET.occurrencesParImage
-      );
       expect(reponse.duration, "réponse serveur").to.be.lessThan(BUDGET.listeTtfbMs);
+    });
+  });
+
+  it("sert chaque variante dans son budget de poids et de temps", () => {
+    cy.request("/fr/projets").then((liste) => {
+      // Une carte du seed de CHARGE, repérée par l'id du livre : les deux livres
+      // du seed déterministe ouvrent le catalogue, et leur artwork géométrique se
+      // compresse ~15 fois mieux qu'une photographie. Mesurer la première carte
+      // venue donnerait donc un chiffre flatteur, et un budget sans dents.
+      const carte = urlsMedia(liste.body).find((url) => url.includes("/seed-perf-livre-"));
+      expect(carte, "au moins une carte de charge à mesurer").to.be.a("string");
+
+      cy.request(carte).then((reponse) => {
+        const poids = ko(reponse.headers["content-length"] as unknown as number);
+        noter("Media — variante carte", `${poids} Ko en ${reponse.duration} ms`);
+        expect(reponse.headers["content-type"]).to.eq("image/webp");
+        expect(reponse.headers["cache-control"], "cache immuable").to.contain("immutable");
+        expect(poids, "poids d'une carte").to.be.lessThan(BUDGET.carteKo);
+        expect(reponse.duration, "réponse de /media").to.be.lessThan(BUDGET.mediaTtfbMs);
+      });
+    });
+
+    cy.request("/fr/projets/perf-livre-001").then((fiche) => {
+      const couverture = urlsMedia(fiche.body).find((url) => url.includes("/cover-"));
+      expect(couverture, "la fiche cite sa couverture pleine taille").to.be.a("string");
+      cy.request(couverture!).then((reponse) => {
+        const poids = ko(reponse.headers["content-length"] as unknown as number);
+        noter("Media — couverture de fiche", `${poids} Ko en ${reponse.duration} ms`);
+        expect(poids, "poids d'une couverture").to.be.lessThan(BUDGET.couvertureKo);
+      });
+    });
+  });
+
+  it("garde une fiche livre légère malgré recto et verso", () => {
+    cy.request("/fr/projets/perf-livre-001").then((reponse) => {
+      const totalKo = ko(reponse.body.length);
+      const images = urlsMedia(reponse.body);
+
+      noter("Fiche — HTML total", `${totalKo} Ko`);
+      noter("Fiche — images citées", `${images.length}`);
+      noter("Fiche — réponse serveur", `${reponse.duration} ms`);
+
+      expect(reponse.body, "aucune image inlinée dans le HTML").to.not.contain("data:image/");
+      expect(totalKo, "poids de la fiche").to.be.lessThan(BUDGET.ficheKo);
+      expect(reponse.duration, "réponse serveur").to.be.lessThan(BUDGET.ficheTtfbMs);
     });
   });
 
@@ -149,9 +173,18 @@ describe(`Charge du catalogue (${NB_LIVRES} livres)`, () => {
       const nav = win.performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
       const taches = (win as unknown as { __longTasks: number[] }).__longTasks;
       const pire = taches.length ? Math.max(...taches) : 0;
+      // Le catalogue a été parcouru de bout en bout, donc tout a fini par se
+      // charger : ce chiffre dit le poids réseau d'une visite complète, PAS que
+      // le chargement est différé — cette propriété-là se vérifie sur l'attribut
+      // `loading` (cypress/e2e/public/media.cy.ts).
+      const images = win.performance
+        .getEntriesByType("resource")
+        .filter((entree) => entree.name.includes("/media/")) as PerformanceResourceTiming[];
+      const reseauKo = ko(images.reduce((somme, image) => somme + image.transferSize, 0));
 
       noter("Navigateur — DOMContentLoaded", `${Math.round(nav.domContentLoadedEventEnd)} ms`);
       noter("Navigateur — chargement complet", `${Math.round(nav.loadEventEnd)} ms`);
+      noter("Navigateur — images téléchargées", `${images.length} pour ${reseauKo} Ko`);
       noter("Défilement — tâches > 50 ms", `${taches.length}`);
       noter("Défilement — pire tâche", `${Math.round(pire)} ms`);
 
@@ -160,28 +193,12 @@ describe(`Charge du catalogue (${NB_LIVRES} livres)`, () => {
     });
   });
 
-  it("garde une fiche livre dans son budget malgré recto et verso inline", () => {
-    cy.request("/fr/projets/perf-livre-001").then((reponse) => {
-      const totalKo = ko(reponse.body.length);
-      const img = analyseImages(reponse.body);
-
-      noter("Fiche — HTML total", `${totalKo} Ko`);
-      noter("Fiche — images distinctes", `${img.distinctKo} Ko sur ${img.nombre} images`);
-      noter("Fiche — doublons", `+${img.doublonKo} Ko`);
-      noter("Fiche — occurrences par image", `${img.occurrences.toFixed(1)}`);
-      noter("Fiche — réponse serveur", `${reponse.duration} ms`);
-
-      expect(totalKo, "poids de la fiche").to.be.lessThan(BUDGET.ficheKo);
-      expect(img.occurrences, "apparitions de chaque image").to.be.at.most(BUDGET.occurrencesFiche);
-      expect(reponse.duration, "réponse serveur").to.be.lessThan(BUDGET.ficheTtfbMs);
-    });
-  });
-
   it("garde le tableau de bord admin utilisable avec 50 vignettes", () => {
     cy.login();
     cy.request("/admin").then((reponse) => {
       noter("Admin — HTML total", `${ko(reponse.body.length)} Ko`);
       noter("Admin — réponse serveur", `${reponse.duration} ms`);
+      expect(reponse.body, "aucune image inlinée dans le HTML").to.not.contain("data:image/");
       expect(ko(reponse.body.length), "poids du tableau de bord").to.be.lessThan(BUDGET.adminKo);
     });
 

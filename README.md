@@ -38,7 +38,7 @@ Un fichier, désigné par `CONTENT_FILE` (`./data/content.json` en dev) :
   "books": [
     {
       "id": "…", "slug": "les-jardins-suspendus", "status": "published",
-      "coverThumb": "data:image/webp;base64,…",
+      "coverCard": "data:image/webp;base64,…",
       "coverImage": "data:image/webp;base64,…",
       "backCoverImage": "data:image/webp;base64,…",
       "purchaseUrl": "https://libraire.example/…",
@@ -91,7 +91,7 @@ Deux valeurs sont déduites plutôt que demandées, parce qu'elles se trompent f
 | `admin/auth` | Garde d'accès sur toutes les pages du back office, absence d'énumération de compte |
 | `admin/book-crud` | Cycle de vie complet d'un livre, dont le renommage de slug |
 | `admin/book-validation` | Unicité du slug et refus des fichiers non-images — les garanties que la base assurait avant |
-| `admin/content-store` | Ce qui est **réellement écrit** dans `content.json` : trois variantes WebP inline, forme de l'entrée, absence de verso |
+| `admin/content-store` | Ce qui est **réellement écrit** dans `content.json` : trois variantes WebP au format 2:3, forme de l'entrée, absence de verso |
 | `public/home`, `public/projects`, `public/project-detail` | Navigation, visibilité des publiés, invisibilité des brouillons, carte retournable, accessibilité |
 | `public/i18n` | Parité stricte des clés `fr.json`/`en.json`, bascule de langue |
 | `public/seo` | `robots.txt`, sitemap sans brouillon, image OpenGraph décodée |
@@ -107,27 +107,30 @@ géométrique des autres seeds se compresse ~15 fois mieux qu'une vraie couvertu
 des mesures flatteuses — puis mesure la page la plus exposée, la liste des projets. Mesures
 nominales sur une machine de dev, 52 livres publiés :
 
-| Mesure | Valeur |
-| --- | --- |
-| Liste — HTML total | 1 600 Ko |
-| Liste — images distinctes | 751 Ko (14 Ko par livre) |
-| Liste — réponse serveur | ~200 ms |
-| Navigateur — chargement complet | ~460 ms |
-| Défilement — pire tâche bloquante | ~100 ms |
-| Fiche livre — HTML total | 582 Ko |
-| `content.json` | 13,6 Mo |
+| Mesure | Valeur | Avant `/media` |
+| --- | --- | --- |
+| Liste — HTML total | 99 Ko | 1 600 Ko |
+| Liste — réponse serveur | ~90 ms | ~200 ms |
+| Navigateur — chargement complet | ~402 ms | ~460 ms |
+| Défilement — pire tâche bloquante | ~99 ms | ~100 ms |
+| Fiche livre — HTML total | 22 Ko | 582 Ko |
+| Image — variante carte (600 px) | ~42 Ko | — |
+| Image — couverture de fiche (900 px) | ~81 Ko | — |
+| `content.json` | 15,4 Mo | 13,6 Mo |
 
-Le test échoue si un ordre de grandeur change — typiquement si les listes se mettaient à servir
-la couverture 900 px au lieu de la miniature 320 px, ce qu'aucun test fonctionnel ne verrait.
+La colonne de droite date de l'époque où les couvertures étaient inlinées en data URI dans le
+HTML. Trois défauts en découlaient, et c'est la route `/media` qui les a levés :
 
-Deux constats que ces mesures ont sortis, non corrigés à ce jour :
+- **chaque image y pesait deux fois** — une dans le `<img src>`, une dans la charge utile RSC que
+  Next embarque pour l'hydratation : la moitié du poids image d'une page était un doublon ;
+- **la prop `priority`** ajoutait un `<link rel="preload">` qui la recopiait une troisième fois,
+  pour précharger des octets déjà présents dans le document — ~110 Ko perdus par fiche ;
+- **rien n'était cachable ni différé** : `next/image` force `unoptimized` et `isLazy = false` sur
+  toute source `data:`, donc chaque visite retéléchargeait tout le catalogue.
 
-- **Chaque image apparaît deux fois dans le HTML** : dans le `<img src>` et dans la charge utile
-  RSC que Next embarque pour l'hydratation. La moitié du poids image d'une page est un doublon.
-  C'est le prix structurel de l'inline avec l'App Router.
-- **La prop `priority` de `next/image`** ajoute un `<link rel="preload">` sur la couverture, qui
-  recopie une troisième fois la data URI. Précharger une data URI ne sert à rien, les octets sont
-  déjà dans le document : ~110 Ko gaspillés par fiche livre.
+L'assertion qui garde des dents est devenue : **aucune data URI dans le HTML**. Une régression
+d'une ligne — repasser une image stockée à un composant au lieu de son URL — ramènerait tout ce
+poids d'un coup sans qu'aucun test fonctionnel ne bronche.
 
 ## Déploiement (OVH VPS)
 

@@ -6,6 +6,11 @@ import { useTranslations } from "next-intl";
 
 const SIZES = "(max-width: 768px) 80vw, 300px";
 
+// `unoptimized` sur les deux faces : les variantes stockées sont déjà en WebP,
+// au format 2:3 et à la taille voulue (cf. src/lib/images.ts). `priority` sur le
+// recto sert enfin à quelque chose depuis que la source est une URL — il
+// préchargeait jusqu'ici une data URI déjà présente dans le document.
+
 /**
  * The book cover, flipped to reveal the back cover on click.
  * Both faces stay mounted so the rotation can animate; the one facing away is
@@ -30,6 +35,7 @@ export function BookCoverFlip({
       fill
       priority
       sizes={SIZES}
+      unoptimized
       className="object-cover"
       data-cy="project-cover"
     />
@@ -82,6 +88,7 @@ export function BookCoverFlip({
             alt={t("backCoverAlt", { title })}
             fill
             sizes={SIZES}
+            unoptimized
             className="object-cover"
             data-cy="project-back-cover"
           />
