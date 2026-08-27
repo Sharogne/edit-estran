@@ -30,7 +30,7 @@ describe("CRUD livre (admin)", () => {
     cy.get("[data-cy=book-form-synopsis-en]").type(
       "A test synopsis written by Cypress, long enough to feel realistic."
     );
-    cy.get("[data-cy=book-form-status]").check();
+    cy.publier();
 
     cy.get("[data-cy=book-form-cover]").selectFile("cypress/fixtures/cover-upload.jpg");
     cy.get("[data-cy=book-form-back-cover]").selectFile("cypress/fixtures/back-cover-upload.jpg");
@@ -125,8 +125,7 @@ describe("CRUD livre (admin)", () => {
   it("supprime le livre définitivement", () => {
     cy.visit("/admin");
     cy.get(`[data-cy=admin-book-row-${SLUG}]`).click();
-    // Cypress accepte automatiquement window.confirm
-    cy.get("[data-cy=admin-delete-book]").click();
+    cy.supprimerLivre();
 
     cy.url({ timeout: 30000 }).should("match", /\/admin$/);
     cy.get(`[data-cy=admin-book-row-${SLUG}]`).should("not.exist");

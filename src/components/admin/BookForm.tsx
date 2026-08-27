@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import type { BookActionState } from "@/app/admin/(protected)/livres/actions";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -16,6 +16,7 @@ import {
   SEUIL_ALERTE,
 } from "@/config/content-limits";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export type BookFormDefaults = {
   bookId?: string;
@@ -305,6 +306,10 @@ export function BookForm({
   // Le décodage d'une image est asynchrone : sans ce compteur, un envoi lancé
   // dans la foulée du choix de fichier partirait avant le verdict.
   const [verifications, setVerifications] = useState(0);
+  // Le titre du livre au moment de la demande — null quand aucune question
+  // n'est posée. Il sert à la fois d'interrupteur et de contenu du dialogue.
+  const [titrePublication, setTitrePublication] = useState<string | null>(null);
+  const casePublier = useRef<HTMLInputElement>(null);
 
   // On verrouille le titre QUI A PRODUIT l'adresse, pas les deux : sinon on
   // interdirait d'ajouter la traduction anglaise d'un livre déjà publié, alors
@@ -324,23 +329,21 @@ export function BookForm({
    * Publier est définitif : le livre part en ligne ET son titre se fige, puisque
    * l'adresse publique en découle. Deux conséquences lourdes et invisibles, dont
    * une sans marche arrière — on les fait donc confirmer explicitement, au même
-   * niveau que la suppression d'un livre (window.confirm).
+   * niveau que la suppression d'un livre.
+   *
+   * Le dialogue répond de façon asynchrone, contrairement au window.confirm
+   * qu'il remplace : la case est donc DÉCOCHÉE le temps de la question, et
+   * cochée seulement si l'éditeur confirme. L'inverse laisserait, l'espace d'un
+   * rendu, une case qui affirme une publication qui n'a pas été décidée.
    */
-  function confirmerPublication(event: React.ChangeEvent<HTMLInputElement>) {
+  function demanderPublication(event: React.ChangeEvent<HTMLInputElement>) {
     if (!event.target.checked) return;
+    event.target.checked = false;
 
     const champs = event.target.form?.elements;
     const titreFr = (champs?.namedItem("title_fr") as HTMLInputElement | null)?.value.trim();
     const titreEn = (champs?.namedItem("title_en") as HTMLInputElement | null)?.value.trim();
-    const titre = titreFr || titreEn || "ce livre";
-
-    const accepte = window.confirm(
-      `Publier « ${titre} » ? Cette action est définitive.\n\n` +
-        "Le livre sera visible sur le site, et son titre — dont découle l'adresse publique — " +
-        "ne sera plus modifiable : changer l'adresse casserait les liens déjà partagés.\n\n" +
-        "Pour retirer le livre du site, il faudra le supprimer."
-    );
-    if (!accepte) event.target.checked = false;
+    setTitrePublication(titreFr || titreEn || "ce livre");
   }
 
   async function verifierFichier(name: string, input: HTMLInputElement) {
@@ -474,7 +477,8 @@ export function BookForm({
                   type="checkbox"
                   value="published"
                   defaultChecked={false}
-                  onChange={confirmerPublication}
+                  ref={casePublier}
+                  onChange={demanderPublication}
                   data-cy="book-form-status"
                 />
                 Publier ce livre
@@ -579,6 +583,28 @@ export function BookForm({
           Modifications enregistrées.
         </p>
       )}
+
+      <ConfirmDialog
+        ouvert={titrePublication !== null}
+        titre={`Publier « ${titrePublication} » ?`}
+        confirmer="Publier"
+        cy="publish"
+        onAnnuler={() => setTitrePublication(null)}
+        onConfirmer={() => {
+          if (casePublier.current) casePublier.current.checked = true;
+          setTitrePublication(null);
+        }}
+      >
+        <p>
+          Le livre deviendra visible sur le site. Cette action est définitive : pour l&apos;en
+          retirer, il faudra le supprimer.
+        </p>
+        <p>
+          Son titre ne sera plus modifiable, car l&apos;adresse publique en découle et la changer
+          casserait les liens déjà partagés.
+        </p>
+        <p>La publication ne prendra effet qu&apos;à l&apos;enregistrement du formulaire.</p>
+      </ConfirmDialog>
 
       <div className="flex items-center gap-4 border-t border-line pt-6">
         <Button type="submit" disabled={isPending || verifications > 0} data-cy="book-form-submit">

@@ -24,7 +24,7 @@ describe("Repli de traduction", () => {
     cy.visit("/admin/livres/nouveau");
     cy.get("[data-cy=book-form-title-fr]").type(TITRE_FR);
     cy.get("[data-cy=book-form-synopsis-fr]").type(SYNOPSIS_FR);
-    cy.get("[data-cy=book-form-status]").check();
+    cy.publier();
     cy.get("[data-cy=book-form-cover]").selectFile("cypress/fixtures/cover-upload.jpg");
     cy.get("[data-cy=book-form-submit]").click();
 

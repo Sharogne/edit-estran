@@ -36,7 +36,7 @@ function creerLivre(titre: string, avecVerso: boolean) {
   cy.get("[data-cy=book-form-synopsis-fr]").type("Synopsis FR pour vérifier le stockage.");
   cy.get("[data-cy=book-form-title-en]").type(`${titre} (EN)`);
   cy.get("[data-cy=book-form-synopsis-en]").type("EN synopsis to check what gets stored.");
-  cy.get("[data-cy=book-form-status]").check();
+  cy.publier();
   cy.get("[data-cy=book-form-cover]").selectFile("cypress/fixtures/cover-upload.jpg");
   if (avecVerso) {
     cy.get("[data-cy=book-form-back-cover]").selectFile("cypress/fixtures/back-cover-upload.jpg");

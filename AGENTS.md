@@ -44,7 +44,7 @@ src/
     session.ts                 iron-session : getSession(), requireAdmin()
     validation/book.ts         Schémas Zod des formulaires livre
   components/
-    ui/                        Primitives du design system (Button, Card, …)
+    ui/                        Primitives du design system (Button, Container, ConfirmDialog…)
     site/                      Composants du site public (Header, Footer, BookCard, BookCoverFlip…)
     admin/                     Composants du back office (BookForm, StatusBadge, …)
   app/
