@@ -130,6 +130,29 @@ pm2 start edit          # le cache mémoire est reconstruit au démarrage
 Toujours arrêter le process avant de remplacer le fichier à la main : le store le garde en
 mémoire et le réécrirait par-dessus à la prochaine sauvegarde.
 
+### Le site affiche « Une erreur est survenue » sur toutes ses pages
+
+Symptôme : chaque URL publique répond 500 avec la page d'erreur du site, alors que
+`/admin/login` répond normalement (cette page ne lit pas le contenu). C'est la signature d'un
+`content.json` illisible — tronqué par un disque plein, ou restauré depuis une sauvegarde
+écrite par une autre version du schéma.
+
+Le store refuse volontairement de démarrer sur un fichier douteux plutôt que de servir un
+catalogue vide : un site brusquement sans livres ferait croire à une perte de données, alors
+que le fichier est là et réparable. Le motif exact est dans les logs.
+
+```bash
+pm2 logs edit --lines 50 --nostream | grep -A3 'Unsupported content file\|JSON'
+df -h /srv                                   # disque plein = cause la plus fréquente
+node -e 'JSON.parse(require("fs").readFileSync("/srv/edit/shared/content.json","utf8"))'
+ls -la /srv/edit/backups/                    # repartir de la dernière copie saine
+```
+
+Puis restaurer comme ci-dessus (`pm2 stop` → `cp` → `pm2 start`). Vérifier au passage qu'aucun
+fichier `content.json.<pid>.tmp` ne traîne dans `/srv/edit/shared/` : il signe une écriture
+interrompue, et se supprime sans risque — l'original n'est remplacé qu'une fois le temporaire
+complet.
+
 ## Notes
 
 - PM2 lance Next directement (`node_modules/next/dist/bin/next start`, voir
