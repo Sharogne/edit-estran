@@ -64,6 +64,51 @@ describe("Règles de validation (admin)", () => {
     cy.storedBook("cy-lien-invalide").should("be.null");
   });
 
+  it("refuse une image illisible par un message, pas par une erreur serveur", () => {
+    cy.visit("/admin/livres/nouveau");
+    remplirFormulaire("Cy Image Illisible");
+
+    // Le type MIME vient du navigateur, qui le déduit de l'extension : un
+    // fichier renommé passe le contrôle client et n'échoue qu'au décodage.
+    // Sans garde côté action, sharp lève et l'éditeur reçoit une erreur 500.
+    cy.get("[data-cy=book-form-cover]").selectFile({
+      contents: Cypress.Buffer.from("ceci n'est pas une image malgre son extension"),
+      fileName: "couverture.jpg",
+      mimeType: "image/jpeg",
+    });
+    // Rien à signaler côté navigateur : format et poids sont conformes.
+    cy.get("[data-cy=book-form-error-cover]").should("not.exist");
+    cy.get("[data-cy=book-form-submit]").click();
+
+    cy.get("[data-cy=book-form-error]")
+      .should("be.visible")
+      .and("contain", "Couverture")
+      .and("contain", "illisible");
+    cy.storedBook("cy-image-illisible").should("be.null");
+  });
+
+  it("conserve la saisie quand le serveur refuse le formulaire", () => {
+    cy.visit("/admin/livres/nouveau");
+    // Un synopsis représente un vrai travail de rédaction : le perdre sur une
+    // erreur de validation est inacceptable. React réinitialise un formulaire
+    // non contrôlé après chaque action — d'où des champs pilotés par l'état.
+    cy.get("[data-cy=book-form-title-fr]").clear().type("Cy Saisie Conservee");
+    cy.get("[data-cy=book-form-synopsis-fr]")
+      .clear()
+      .type("Un synopsis qu'on ne veut pas retaper.");
+    cy.get("[data-cy=book-form-purchase-url]").clear().type("pas-une-url");
+    cy.get("[data-cy=book-form-submit]").click();
+
+    cy.get("[data-cy=book-form-error]").should("contain", "Lien d'achat");
+    cy.get("[data-cy=book-form-title-fr]").should("have.value", "Cy Saisie Conservee");
+    cy.get("[data-cy=book-form-synopsis-fr]").should(
+      "have.value",
+      "Un synopsis qu'on ne veut pas retaper."
+    );
+    cy.get("[data-cy=book-form-purchase-url]").should("have.value", "pas-une-url");
+    cy.storedBook("cy-saisie-conservee").should("be.null");
+  });
+
   it("bloque une image trop lourde côté navigateur, sans rien envoyer", () => {
     cy.visit("/admin/livres/nouveau");
     remplirFormulaire("Cy Image Lourde");

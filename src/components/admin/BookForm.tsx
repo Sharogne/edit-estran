@@ -43,6 +43,29 @@ const fileClasses = `${inputClasses} file:mr-3 file:rounded-md file:border-0 fil
 
 const MAX_IMAGE_MO = MAX_IMAGE_BYTES / (1024 * 1024);
 
+/** Les champs texte du formulaire, tels qu'ils sont saisis (jamais les images). */
+type Saisie = {
+  title_fr: string;
+  synopsis_fr: string;
+  title_en: string;
+  synopsis_en: string;
+  status: string;
+  publishedAt: string;
+  purchaseUrl: string;
+};
+
+function valeursInitiales(defaults: BookFormDefaults): Saisie {
+  return {
+    title_fr: defaults.fr.title,
+    synopsis_fr: defaults.fr.synopsis,
+    title_en: defaults.en.title,
+    synopsis_en: defaults.en.synopsis,
+    status: defaults.status,
+    publishedAt: defaults.publishedAt,
+    purchaseUrl: defaults.purchaseUrl,
+  };
+}
+
 /**
  * Petit repère d'aide. Le `title` donne l'infobulle au survol, mais le même
  * texte est TOUJOURS affiché sous le champ : une infobulle est invisible au
@@ -142,6 +165,32 @@ export function BookForm({
   const [state, formAction, isPending] = useActionState<BookActionState, FormData>(action, {});
   const [erreursFichier, setErreursFichier] = useState<Record<string, string>>({});
 
+  /**
+   * Champs texte pilotés par l'état plutôt que par le DOM.
+   *
+   * React réinitialise un formulaire non contrôlé après chaque server action :
+   * sur une erreur de validation, l'éditeur perdait tout — y compris un
+   * synopsis de plusieurs milliers de signes — et se retrouvait devant un
+   * message d'erreur et des champs vides. Contrôler les champs suffit à les
+   * conserver, l'état du composant survivant au rendu déclenché par l'action.
+   */
+  const [saisie, setSaisie] = useState(() => valeursInitiales(defaults));
+  const [reference, setReference] = useState(defaults);
+
+  // Le serveur reste la source de vérité : quand il renvoie d'autres valeurs
+  // (revalidation après enregistrement, modification faite ailleurs), on repart
+  // de lui. Ajustement pendant le rendu, comme dans BookList.
+  if (reference !== defaults) {
+    setReference(defaults);
+    setSaisie(valeursInitiales(defaults));
+  }
+
+  const champ = (nom: keyof Saisie) => ({
+    value: saisie[nom],
+    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setSaisie((precedent) => ({ ...precedent, [nom]: event.target.value })),
+  });
+
   // On verrouille le titre QUI A PRODUIT l'adresse, pas les deux : sinon on
   // interdirait d'ajouter la traduction anglaise d'un livre déjà publié, alors
   // que ce titre-là n'a aucune incidence sur l'URL.
@@ -163,19 +212,20 @@ export function BookForm({
    * statut. Même parti pris que la suppression d'un livre (window.confirm).
    */
   function confirmerPublication(event: React.ChangeEvent<HTMLSelectElement>) {
-    if (event.target.value !== "published" || defaults.urlFigee) return;
+    const choisi = event.target.value;
+    setSaisie((precedent) => ({ ...precedent, status: choisi }));
+    if (choisi !== "published" || defaults.urlFigee) return;
 
-    const champs = event.target.form?.elements;
-    const titreFr = (champs?.namedItem("title_fr") as HTMLInputElement | null)?.value.trim();
-    const titreEn = (champs?.namedItem("title_en") as HTMLInputElement | null)?.value.trim();
-    const titre = titreFr || titreEn || "ce livre";
+    // Les titres viennent de l'état, seule source du contenu des champs.
+    const titre = saisie.title_fr.trim() || saisie.title_en.trim() || "ce livre";
 
     const accepte = window.confirm(
       `Attention : une fois « ${titre} » publié, son titre ne sera plus modifiable.\n\n` +
         "L'adresse publique du livre en est dérivée, et la changer casserait les liens " +
         "déjà partagés. Corrigez le titre maintenant si nécessaire.\n\nPublier ce livre ?"
     );
-    if (!accepte) event.target.value = "draft";
+    // Le champ étant contrôlé, revenir en arrière passe par l'état, pas par le DOM.
+    if (!accepte) setSaisie((precedent) => ({ ...precedent, status: "draft" }));
   }
 
   function verifierFichier(name: string, input: HTMLInputElement) {
@@ -206,7 +256,7 @@ export function BookForm({
               id="title_fr"
               name="title_fr"
               maxLength={200}
-              defaultValue={defaults.fr.title}
+              {...champ("title_fr")}
               readOnly={titreFrVerrouille}
               aria-describedby="aide_titre_fr"
               data-cy="book-form-title-fr"
@@ -225,7 +275,7 @@ export function BookForm({
               name="synopsis_fr"
               rows={7}
               maxLength={5000}
-              defaultValue={defaults.fr.synopsis}
+              {...champ("synopsis_fr")}
               data-cy="book-form-synopsis-fr"
               className={inputClasses}
             />
@@ -246,7 +296,7 @@ export function BookForm({
               id="title_en"
               name="title_en"
               maxLength={200}
-              defaultValue={defaults.en.title}
+              {...champ("title_en")}
               readOnly={titreEnVerrouille}
               data-cy="book-form-title-en"
               className={titreEnVerrouille ? verrouilleClasses : inputClasses}
@@ -266,7 +316,7 @@ export function BookForm({
               name="synopsis_en"
               rows={7}
               maxLength={5000}
-              defaultValue={defaults.en.synopsis}
+              {...champ("synopsis_en")}
               data-cy="book-form-synopsis-en"
               className={inputClasses}
             />
@@ -299,7 +349,7 @@ export function BookForm({
           <select
             id="status"
             name="status"
-            defaultValue={defaults.status}
+            value={saisie.status}
             onChange={confirmerPublication}
             data-cy="book-form-status"
             className={inputClasses}
@@ -320,7 +370,7 @@ export function BookForm({
             id="publishedAt"
             name="publishedAt"
             type="date"
-            defaultValue={defaults.publishedAt}
+            {...champ("publishedAt")}
             data-cy="book-form-published-at"
             className={inputClasses}
           />
@@ -337,7 +387,7 @@ export function BookForm({
             inputMode="url"
             maxLength={500}
             placeholder="https://…"
-            defaultValue={defaults.purchaseUrl}
+            {...champ("purchaseUrl")}
             data-cy="book-form-purchase-url"
             className={inputClasses}
           />

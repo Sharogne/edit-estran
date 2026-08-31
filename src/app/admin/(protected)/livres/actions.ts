@@ -15,7 +15,7 @@ import {
   imageFileSchema,
   reorderSchema,
 } from "@/lib/validation/book";
-import { BACK_COVER, COVER_FULL, COVER_THUMB, processImage } from "@/lib/images";
+import { BACK_COVER, COVER_FULL, COVER_THUMB, processImage, type ImageVariant } from "@/lib/images";
 
 export type BookActionState = { error?: string; success?: boolean };
 
@@ -52,6 +52,7 @@ function formatZodError(error: z.ZodError): string {
 }
 
 class ImageValidationError extends Error {}
+class ImageProcessingError extends Error {}
 class BookGoneError extends Error {}
 
 const BOOK_GONE = "Livre introuvable.";
@@ -94,6 +95,26 @@ type BookImages = Pick<StoredBook, "coverThumb" | "coverImage" | "backCoverImage
 const NO_IMAGES: BookImages = { coverThumb: null, coverImage: null, backCoverImage: null };
 
 /**
+ * Encode une image en isolant les échecs de décodage.
+ *
+ * Le type MIME contrôlé par Zod vient du navigateur, qui le déduit de
+ * l'extension — il ne dit rien du contenu réel. Un fichier renommé, tronqué ou
+ * dans un format que sharp refuse passe donc la validation et n'échoue qu'ici.
+ * Sans ce repli, l'exception remonte non gérée : erreur 500 muette, et
+ * l'éditeur perd toute sa saisie sans savoir que son fichier est en cause.
+ */
+async function encodeOuEchoue(file: File, variant: ImageVariant, champ: string): Promise<string> {
+  try {
+    return await processImage(file, variant);
+  } catch {
+    throw new ImageProcessingError(
+      `${champ} : image illisible. Le fichier est corrompu ou n'est pas une image ` +
+        "malgré son extension. Réenregistrez-le en JPEG ou PNG avant de le déposer."
+    );
+  }
+}
+
+/**
  * Encodes whichever images were uploaded; fields left empty keep their current
  * value. Deliberately called OUTSIDE mutateContent: sharp is slow and the write
  * queue is global, so encoding must not hold it.
@@ -111,11 +132,11 @@ async function applyImages(
   if (cover) {
     // Two variants from the same upload: the thumb keeps list pages light, the
     // full one is what the book page displays.
-    next.coverThumb = await processImage(cover, COVER_THUMB);
-    next.coverImage = await processImage(cover, COVER_FULL);
+    next.coverThumb = await encodeOuEchoue(cover, COVER_THUMB, "Couverture");
+    next.coverImage = await encodeOuEchoue(cover, COVER_FULL, "Couverture");
   }
   if (backCover) {
-    next.backCoverImage = await processImage(backCover, BACK_COVER);
+    next.backCoverImage = await encodeOuEchoue(backCover, BACK_COVER, "4e de couverture");
   }
   return next;
 }
@@ -138,17 +159,21 @@ export async function createBook(
   if (!parsed.success) return { error: formatZodError(parsed.error) };
   const data = parsed.data;
 
-  let cover: File | undefined;
-  let backCover: File | undefined;
+  // Lecture ET encodage sous la même garde : les deux échouent pour la même
+  // raison côté éditeur (« ce fichier ne convient pas »), et tout autre échec
+  // doit continuer à remonter.
+  let images: BookImages;
   try {
-    cover = imageFile(formData, "cover");
-    backCover = imageFile(formData, "backCover");
+    const cover = imageFile(formData, "cover");
+    const backCover = imageFile(formData, "backCover");
+    images = await applyImages(NO_IMAGES, cover, backCover);
   } catch (error) {
-    if (error instanceof ImageValidationError) return { error: error.message };
+    if (error instanceof ImageValidationError || error instanceof ImageProcessingError) {
+      return { error: error.message };
+    }
     throw error;
   }
 
-  const images = await applyImages(NO_IMAGES, cover, backCover);
   const bookId = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -192,17 +217,17 @@ export async function updateBook(
   if (!parsed.success) return { error: formatZodError(parsed.error) };
   const data = parsed.data;
 
-  let cover: File | undefined;
-  let backCover: File | undefined;
+  let images: BookImages;
   try {
-    cover = imageFile(formData, "cover");
-    backCover = imageFile(formData, "backCover");
+    const cover = imageFile(formData, "cover");
+    const backCover = imageFile(formData, "backCover");
+    images = await applyImages(existing, cover, backCover);
   } catch (error) {
-    if (error instanceof ImageValidationError) return { error: error.message };
+    if (error instanceof ImageValidationError || error instanceof ImageProcessingError) {
+      return { error: error.message };
+    }
     throw error;
   }
-
-  const images = await applyImages(existing, cover, backCover);
 
   let nouveauSlug = existing.slug;
   try {
