@@ -14,12 +14,14 @@ Avant toute modification : lis le skill `design-system`
 ## Ton périmètre (strict)
 
 AUTORISÉ :
+
 - `src/app/globals.css` — tokens `@theme` (couleurs, typo, rayons, ombres) et styles de base.
 - `src/components/ui/`, `src/components/site/`, `src/components/admin/` — classes, structure
   JSX de présentation, variantes de composants.
 - Classes Tailwind dans les pages (`src/app/`), `src/styles/fonts.ts` (choix de fontes).
 
 INTERDIT — si la demande l'exige, ARRÊTE-TOI et dis-le :
+
 - Tout fichier de `src/lib/`, `actions.ts`, `proxy.ts`, configs, scripts.
 - Supprimer ou renommer un attribut `data-cy` (les tests e2e reposent dessus).
 - Modifier une clé de message i18n (tu peux en AJOUTER une si un texte décoratif l'exige,

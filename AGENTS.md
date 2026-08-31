@@ -10,16 +10,16 @@ office réservé à un éditeur unique (admin). Hébergement : **VPS OVH** (Node
 
 ## Stack
 
-| Brique | Choix | Notes |
-| --- | --- | --- |
-| Framework | Next.js 16 (App Router) + TypeScript strict | Serveur Node classique (`next start` derrière PM2) |
-| Styles | Tailwind CSS v4 | Tokens dans `src/app/globals.css` via `@theme` — JAMAIS de valeurs en dur |
-| Données | Un fichier JSON (`content.json`) | **Aucune base de données.** Backup = copie d'un fichier |
-| i18n | next-intl v4 | Segment `[locale]`, messages dans `messages/{fr,en}.json` |
-| Auth | iron-session + bcryptjs | Cookie chiffré, un seul compte admin (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH_B64` dans `.env`) |
-| Images | sharp | Recompressées en WebP puis **inlinées en data URI** dans le JSON — aucun dossier d'uploads |
-| Validation | Zod v4 | Schémas partagés dans `src/lib/validation/` |
-| Tests e2e | Cypress | Sélecteurs `data-cy` uniquement, fichier de contenu de test dédié (`.env.test`) |
+| Brique     | Choix                                       | Notes                                                                                        |
+| ---------- | ------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Framework  | Next.js 16 (App Router) + TypeScript strict | Serveur Node classique (`next start` derrière PM2)                                           |
+| Styles     | Tailwind CSS v4                             | Tokens dans `src/app/globals.css` via `@theme` — JAMAIS de valeurs en dur                    |
+| Données    | Un fichier JSON (`content.json`)            | **Aucune base de données.** Backup = copie d'un fichier                                      |
+| i18n       | next-intl v4                                | Segment `[locale]`, messages dans `messages/{fr,en}.json`                                    |
+| Auth       | iron-session + bcryptjs                     | Cookie chiffré, un seul compte admin (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH_B64` dans `.env`) |
+| Images     | sharp                                       | Recompressées en WebP puis **inlinées en data URI** dans le JSON — aucun dossier d'uploads   |
+| Validation | Zod v4                                      | Schémas partagés dans `src/lib/validation/`                                                  |
+| Tests e2e  | Cypress                                     | Sélecteurs `data-cy` uniquement, fichier de contenu de test dédié (`.env.test`)              |
 
 ## Carte d'architecture
 
@@ -77,6 +77,7 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
 ## Conventions — NON NÉGOCIABLES
 
 ### Code
+
 - TypeScript strict ; pas de `any` non justifié.
 - Server Components par défaut ; `"use client"` uniquement quand nécessaire (état, événements).
 - Mutations = **Server Actions** dans un fichier `actions.ts` du segment concerné. Jamais de
@@ -87,6 +88,7 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
   (`/[locale]`, `/[locale]/projets`, `/[locale]/projets/[slug]`).
 
 ### Données
+
 - `content.json` ne se lit et ne s'écrit QUE via `src/lib/store.ts`. Les pages et composants ne
   connaissent que `src/lib/books.ts` — ils ne touchent jamais au store directement.
 - Toute écriture passe par `mutateContent()` : les mutations sont sérialisées et le fichier est
@@ -111,6 +113,7 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
   mutation : il purge le router cache côté client.
 
 ### i18n
+
 - Tout texte du site public passe par `messages/fr.json` **et** `messages/en.json` — une clé
   ajoutée dans l'un DOIT exister dans l'autre. Jamais de texte public en dur.
 - Le back office (`/admin`) est en français : texte en dur autorisé là-bas uniquement.
@@ -119,6 +122,7 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
 - Contenu en base : champs traduits dans `StoredBook.translations`, une entrée par locale.
 
 ### Design
+
 - Couleurs, typo, rayons, espacements : **uniquement** via les tokens `@theme` de
   `src/app/globals.css`. Un composant ne contient jamais de couleur hex/oklch en dur.
 - Primitives réutilisables dans `src/components/ui/` — les pages composent, elles ne stylent pas
@@ -126,6 +130,7 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
 - Toute itération design passe par l'agent `design-implementer` et le skill `design-system`.
 
 ### Tests
+
 - Tout élément interactif ou assertable porte un attribut **`data-cy`** (kebab-case :
   `data-cy="book-form-title-fr"`). Les specs Cypress ne sélectionnent QUE via `data-cy`.
 - Toute feature livrée = spec e2e mise à jour ou créée. La suite `npm run e2e` doit être verte
@@ -136,6 +141,7 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
   un `before`/`after` (`cy.removeBookIfPresent`) — un échec ne doit pas contaminer le run suivant.
 
 ### Sécurité
+
 - Jamais de secret en dur (tout passe par `.env`, voir `.env.example`). Le mot de passe admin
   n'existe QUE sous forme de hash bcrypt, base64-encodé (`ADMIN_PASSWORD_HASH_B64`) — jamais
   en clair, jamais commité.
@@ -150,15 +156,15 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
 
 ## Agents & skills du projet
 
-| Quand… | Utiliser |
-| --- | --- |
-| Implémenter une feature complète (données → admin → public) | agent `feature-dev` |
-| Itérer sur le design (couleurs, typo, layout, composants) | agent `design-implementer` + skill `design-system` |
-| Écrire/réparer/exécuter des tests Cypress | agent `e2e-guardian` + skill `run-e2e` |
-| Relire des changements avant commit | agent `code-reviewer` |
-| Ajouter un champ aux livres (ex. auteur, ISBN, date de parution) | skill `add-book-field` |
-| Ajouter une page publique (ex. contact, à-propos) | skill `new-public-page` |
-| Déployer ou configurer le VPS OVH | skill `deploy-ovh` |
+| Quand…                                                           | Utiliser                                           |
+| ---------------------------------------------------------------- | -------------------------------------------------- |
+| Implémenter une feature complète (données → admin → public)      | agent `feature-dev`                                |
+| Itérer sur le design (couleurs, typo, layout, composants)        | agent `design-implementer` + skill `design-system` |
+| Écrire/réparer/exécuter des tests Cypress                        | agent `e2e-guardian` + skill `run-e2e`             |
+| Relire des changements avant commit                              | agent `code-reviewer`                              |
+| Ajouter un champ aux livres (ex. auteur, ISBN, date de parution) | skill `add-book-field`                             |
+| Ajouter une page publique (ex. contact, à-propos)                | skill `new-public-page`                            |
+| Déployer ou configurer le VPS OVH                                | skill `deploy-ovh`                                 |
 
 **Règle d'évolution des piliers** : quand une itération révèle une procédure récurrente non
 couverte, créer le skill correspondant (même format) ; quand un skill ment (commande/chemin

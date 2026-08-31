@@ -71,30 +71,30 @@ Deux valeurs sont déduites plutôt que demandées, parce qu'elles se trompent f
 
 ## Commandes
 
-| Commande | Rôle |
-| --- | --- |
-| `npm run dev` / `build` / `start` | Développement / build prod / serveur prod |
-| `npm run lint` / `format` | ESLint / Prettier |
-| `npm run seed` | (Ré)écrit `data/content.json` avec le catalogue de démo |
-| `node scripts/hash-password.mjs "…"` | Génère `ADMIN_PASSWORD_HASH_B64` pour `.env` |
-| `npm run e2e` | Suite Cypress complète headless (fichier de contenu de test dédié) |
-| `npm run e2e:open` | Cypress interactif sur serveur de dev |
-| `npm run perf` | Test de charge : 50 livres, mesure poids et temps du catalogue |
+| Commande                             | Rôle                                                               |
+| ------------------------------------ | ------------------------------------------------------------------ |
+| `npm run dev` / `build` / `start`    | Développement / build prod / serveur prod                          |
+| `npm run lint` / `format`            | ESLint / Prettier                                                  |
+| `npm run seed`                       | (Ré)écrit `data/content.json` avec le catalogue de démo            |
+| `node scripts/hash-password.mjs "…"` | Génère `ADMIN_PASSWORD_HASH_B64` pour `.env`                       |
+| `npm run e2e`                        | Suite Cypress complète headless (fichier de contenu de test dédié) |
+| `npm run e2e:open`                   | Cypress interactif sur serveur de dev                              |
+| `npm run perf`                       | Test de charge : 50 livres, mesure poids et temps du catalogue     |
 
 ## Tests e2e
 
 **41 tests** répartis en neuf specs, sur un fichier de contenu **dédié au test**
 (`.env.test` → `data/test-content.json`) — vos données de dev ne sont jamais touchées.
 
-| Spec | Ce qu'elle protège |
-| --- | --- |
-| `admin/auth` | Garde d'accès sur toutes les pages du back office, absence d'énumération de compte |
-| `admin/book-crud` | Cycle de vie complet d'un livre, dont le renommage de slug |
-| `admin/book-validation` | Unicité du slug et refus des fichiers non-images — les garanties que la base assurait avant |
-| `admin/content-store` | Ce qui est **réellement écrit** dans `content.json` : trois variantes WebP inline, forme de l'entrée, absence de verso |
-| `public/home`, `public/projects`, `public/project-detail` | Navigation, visibilité des publiés, invisibilité des brouillons, carte retournable, accessibilité |
-| `public/i18n` | Parité stricte des clés `fr.json`/`en.json`, bascule de langue |
-| `public/seo` | `robots.txt`, sitemap sans brouillon, image OpenGraph décodée |
+| Spec                                                      | Ce qu'elle protège                                                                                                     |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `admin/auth`                                              | Garde d'accès sur toutes les pages du back office, absence d'énumération de compte                                     |
+| `admin/book-crud`                                         | Cycle de vie complet d'un livre, dont le renommage de slug                                                             |
+| `admin/book-validation`                                   | Unicité du slug et refus des fichiers non-images — les garanties que la base assurait avant                            |
+| `admin/content-store`                                     | Ce qui est **réellement écrit** dans `content.json` : trois variantes WebP inline, forme de l'entrée, absence de verso |
+| `public/home`, `public/projects`, `public/project-detail` | Navigation, visibilité des publiés, invisibilité des brouillons, carte retournable, accessibilité                      |
+| `public/i18n`                                             | Parité stricte des clés `fr.json`/`en.json`, bascule de langue                                                         |
+| `public/seo`                                              | `robots.txt`, sitemap sans brouillon, image OpenGraph décodée                                                          |
 
 Deux tâches Node (`cypress.config.ts`) permettent d'asserter sur le fichier de contenu
 lui-même plutôt que sur le rendu : sans base de données, c'est le seul moyen de vérifier ce qui
@@ -107,15 +107,15 @@ géométrique des autres seeds se compresse ~15 fois mieux qu'une vraie couvertu
 des mesures flatteuses — puis mesure la page la plus exposée, la liste des projets. Mesures
 nominales sur une machine de dev, 52 livres publiés :
 
-| Mesure | Valeur |
-| --- | --- |
-| Liste — HTML total | 1 600 Ko |
-| Liste — images distinctes | 751 Ko (14 Ko par livre) |
-| Liste — réponse serveur | ~200 ms |
-| Navigateur — chargement complet | ~460 ms |
-| Défilement — pire tâche bloquante | ~100 ms |
-| Fiche livre — HTML total | 582 Ko |
-| `content.json` | 13,6 Mo |
+| Mesure                            | Valeur                   |
+| --------------------------------- | ------------------------ |
+| Liste — HTML total                | 1 600 Ko                 |
+| Liste — images distinctes         | 751 Ko (14 Ko par livre) |
+| Liste — réponse serveur           | ~200 ms                  |
+| Navigateur — chargement complet   | ~460 ms                  |
+| Défilement — pire tâche bloquante | ~100 ms                  |
+| Fiche livre — HTML total          | 582 Ko                   |
+| `content.json`                    | 13,6 Mo                  |
 
 Le test échoue si un ordre de grandeur change — typiquement si les listes se mettaient à servir
 la couverture 900 px au lieu de la miniature 320 px, ce qu'aucun test fonctionnel ne verrait.

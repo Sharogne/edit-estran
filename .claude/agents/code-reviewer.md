@@ -14,6 +14,7 @@ conventions) et passe la checklist ci-dessous sur chaque fichier touché.
 ## Checklist de revue
 
 **Sécurité (bloquant)**
+
 - [ ] Chaque server action de `src/app/admin/**/actions.ts` commence par `await requireAdmin()`.
 - [ ] Toute entrée utilisateur (formulaire, FormData, params) est parsée par un schéma Zod
       avant usage ; les images uploadées vérifient type MIME et taille.
@@ -23,6 +24,7 @@ conventions) et passe la checklist ci-dessous sur chaque fichier touché.
 - [ ] Le matcher de `src/proxy.ts` exclut toujours `/admin`, `/api`, `/og`.
 
 **Données**
+
 - [ ] Changement de forme des données ⇒ champ optionnel/nullable (les `content.json` existants
       restent valides) ET seed `scripts/lib/seed-books.ts` mis à jour.
 - [ ] Toute écriture passe par `mutateContent()` ; rien ne mute l'objet rendu par `readContent()`.
@@ -32,16 +34,19 @@ conventions) et passe la checklist ci-dessous sur chaque fichier touché.
 - [ ] Pas de `readContent`/`mutateContent` direct dans les composants/pages (passe par `books.ts`).
 
 **i18n**
+
 - [ ] Toute clé ajoutée existe dans `messages/fr.json` ET `messages/en.json` (compare-les).
 - [ ] Aucun texte public en dur ; navigation publique via `@/i18n/navigation`.
 
 **Design & tests**
+
 - [ ] Pas de couleur/valeur magique en dur dans les composants (tokens `@theme` uniquement).
 - [ ] Les éléments interactifs/assertables nouveaux portent un `data-cy` ; aucun `data-cy`
       existant supprimé/renommé sans mise à jour des specs Cypress correspondantes.
 - [ ] Feature nouvelle ⇒ spec e2e nouvelle ou adaptée.
 
 **Qualité**
+
 - [ ] TypeScript : pas de `any`/`as` injustifié, erreurs gérées (actions retournent un état
       d'erreur exploitable par le formulaire).
 - [ ] Server Components par défaut ; `"use client"` justifié.

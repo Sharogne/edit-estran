@@ -44,11 +44,11 @@ cypress/e2e/public/seo.cy.ts             robots.txt, sitemap, /og
 Sans base de données, une page qui affiche la bonne chose ne prouve pas que la bonne chose a été
 écrite. Trois tâches Node (`setupNodeEvents` dans `cypress.config.ts`) lisent le fichier de test :
 
-| Appel | Renvoie |
-| --- | --- |
-| `cy.storedBook(slug)` | Projection légère d'un livre : statut, champs, taille **décodée** de chaque variante d'image, titres. `null` s'il n'existe pas |
-| `cy.task("storedSlugs")` | Tous les slugs du fichier — pour vérifier qu'un cas d'erreur n'a rien créé |
-| `cy.task("messageKeys")` | Les clés aplaties de `fr.json` et `en.json`, pour le test de parité |
+| Appel                    | Renvoie                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `cy.storedBook(slug)`    | Projection légère d'un livre : statut, champs, taille **décodée** de chaque variante d'image, titres. `null` s'il n'existe pas |
+| `cy.task("storedSlugs")` | Tous les slugs du fichier — pour vérifier qu'un cas d'erreur n'a rien créé                                                     |
+| `cy.task("messageKeys")` | Les clés aplaties de `fr.json` et `en.json`, pour le test de parité                                                            |
 
 Le fichier est relu à chaque appel : sous `.should()`, l'assertion réessaie donc jusqu'à ce que
 l'écriture ait atterri. **Ne jamais renvoyer une data URI telle quelle** depuis une tâche — des
@@ -59,6 +59,7 @@ dizaines de Ko qui noieraient le log Cypress ; d'où la projection.
 `book-crud` et `content-store` enchaînent leurs tests volontairement : recréer un livre coûte
 ~3 s d'encodage sharp. La contrepartie, c'est qu'un échec en cours de route laisse un livre
 derrière lui. Deux parades, à conserver :
+
 - un `before` / `after` qui appelle `cy.removeBookIfPresent(slug)` ;
 - les specs publiques qui comptent des cartes excluent les slugs `cy-`
   (`.not("[data-cy^=book-card-cy-]")`), pour qu'un résidu admin ne les fasse pas tomber en cascade.

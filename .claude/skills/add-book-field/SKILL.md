@@ -51,6 +51,7 @@ une clé explicite l'écrase (bug déjà vécu avec `status`).
 ## 5. Formulaire admin — `src/components/admin/BookForm.tsx`
 
 Ajouter l'input avec :
+
 - un `<label>` français explicite,
 - `defaultValue` branché sur `BookFormDefaults` (mode édition) — penser à étendre ce type et
   `emptyDefaults`, ainsi que la construction des `defaults` dans `livres/[id]/page.tsx`,

@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/<segment
 
 export default async function Page({ params }: PageProps<"/[locale]/<segment>">) {
   const { locale } = await params;
-  setRequestLocale(locale);                  // OBLIGATOIRE (rendu statique)
+  setRequestLocale(locale); // OBLIGATOIRE (rendu statique)
   const t = await getTranslations("<ns>");
   // ...
 }

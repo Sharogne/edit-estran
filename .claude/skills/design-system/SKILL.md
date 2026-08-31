@@ -10,14 +10,14 @@ généreux, sobriété, le livre est la vedette).
 
 ## Où vivent les choses
 
-| Quoi | Où |
-| --- | --- |
-| Tokens (couleurs, rayons, ombres, fontes) | `src/app/globals.css`, bloc `@theme` |
-| Fontes (next/font) | `src/styles/fonts.ts` → variables `--font-display`, `--font-sans` |
-| Primitives réutilisables | `src/components/ui/` |
-| Composants du site public | `src/components/site/` |
-| Composants du back office | `src/components/admin/` |
-| Identité textuelle (nom, baseline) | `src/config/site.ts` + `messages/{fr,en}.json` |
+| Quoi                                      | Où                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| Tokens (couleurs, rayons, ombres, fontes) | `src/app/globals.css`, bloc `@theme`                              |
+| Fontes (next/font)                        | `src/styles/fonts.ts` → variables `--font-display`, `--font-sans` |
+| Primitives réutilisables                  | `src/components/ui/`                                              |
+| Composants du site public                 | `src/components/site/`                                            |
+| Composants du back office                 | `src/components/admin/`                                           |
+| Identité textuelle (nom, baseline)        | `src/config/site.ts` + `messages/{fr,en}.json`                    |
 
 Tailwind v4 : un token `--color-accent` déclaré dans `@theme` donne les classes `bg-accent`,
 `text-accent`, etc. Changer le token rethème tout le site — c'est TOUJOURS la première option.
