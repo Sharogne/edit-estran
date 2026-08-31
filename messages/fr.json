@@ -42,6 +42,12 @@
     "text": "La page que vous cherchez n'existe pas ou n'existe plus.",
     "backHome": "Retour à l'accueil"
   },
+  "error": {
+    "title": "Une erreur est survenue",
+    "text": "La page n'a pas pu être affichée. Le contenu du site est momentanément illisible ; réessayez dans un instant.",
+    "retry": "Réessayer",
+    "backHome": "Retour à l'accueil"
+  },
   "footer": {
     "contact": "Contact",
     "rights": "Tous droits réservés"

@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import type { Locale } from "@/i18n/routing";
+import { routing, type Locale } from "@/i18n/routing";
 import { getPublishedBookBySlug } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { BookCoverFlip } from "@/components/site/BookCoverFlip";
+import { hasLocale } from "next-intl";
 
 // Rendered per request rather than frozen at build time: the content lives in an
 // in-memory JSON store, so a render costs a lookup and no I/O — while a
@@ -57,6 +58,7 @@ export async function generateMetadata({
 
 export default async function ProjectPage({ params }: PageProps<"/[locale]/projets/[slug]">) {
   const { locale, slug } = await params;
+  if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
   const t = await getTranslations("project");
   const book = await getPublishedBookBySlug(slug, locale as Locale);

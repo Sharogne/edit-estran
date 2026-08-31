@@ -2,6 +2,47 @@
 // négociable du projet (AGENTS.md) : jusqu'ici rien ne la vérifiait. Le premier
 // test la couvre à la source, les suivants sur le rendu.
 
+describe("Page introuvable", () => {
+  // Une adresse erronée sur un site vitrine français rendait la page par
+  // défaut de Next : « 404: This page could not be found. », en anglais, sans
+  // style ni en-tête. Seules les fiches livres étaient correctement traitées.
+  it("rend la 404 du site, traduite et habillée, sur une adresse inconnue", () => {
+    for (const [chemin, titre] of [
+      ["/fr/inexistant", "Page introuvable"],
+      ["/en/inexistant", "Page not found"],
+    ] as const) {
+      cy.request({ url: chemin, failOnStatusCode: false }).its("status").should("eq", 404);
+      cy.visit(chemin, { failOnStatusCode: false });
+      cy.get("[data-cy=not-found-title]").should("have.text", titre);
+      // L'habillage du site, absent de la page par défaut de Next.
+      cy.get("[data-cy=header-title]").should("be.visible");
+      cy.get("[data-cy=not-found-home]").should("be.visible");
+    }
+  });
+
+  it("refuse une locale malformée sans lever côté serveur", () => {
+    // Le segment [locale] accepte n'importe quoi. La page se rendait avant que
+    // le notFound() du layout ne prenne effet et atteignait
+    // Intl.DateTimeFormat avec une étiquette invalide : RangeError à chaque
+    // requête. Le visiteur voyait bien un 404, mais chaque robot balayant
+    // /wp-admin ou /.env inondait les logs de production.
+    for (const chemin of ["/de", "/projets", "/e", "/a-b-c", "/123456789"]) {
+      cy.request({ url: chemin, failOnStatusCode: false }).its("status").should("eq", 404);
+      cy.visit(chemin, { failOnStatusCode: false });
+      cy.get("[data-cy=not-found-title]").should("have.text", "Page introuvable");
+      cy.get("[data-cy=header-title]").should("be.visible");
+    }
+  });
+
+  it("garde la 404 traduite pour un livre inconnu ou non publié", () => {
+    for (const chemin of ["/fr/projets/inconnu", "/fr/projets/manuscrit-inacheve"]) {
+      cy.visit(chemin, { failOnStatusCode: false });
+      cy.get("[data-cy=not-found-title]").should("have.text", "Page introuvable");
+      cy.get("[data-cy=header-title]").should("be.visible");
+    }
+  });
+});
+
 describe("Internationalisation", () => {
   it("garde exactement les mêmes clés dans fr.json et en.json", () => {
     cy.task<{ fr: string[]; en: string[] }>("messageKeys").should((cles) => {
