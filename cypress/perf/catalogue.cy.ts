@@ -112,7 +112,8 @@ describe(`Charge du catalogue (${NB_LIVRES} livres)`, () => {
       const carte = urlsMedia(liste.body).find((url) => url.includes("/seed-perf-livre-"));
       expect(carte, "au moins une carte de charge à mesurer").to.be.a("string");
 
-      cy.request(carte).then((reponse) => {
+      // L'assertion ci-dessus garantit la présence ; TypeScript ne la lit pas.
+      cy.request(carte!).then((reponse) => {
         const poids = ko(reponse.headers["content-length"] as unknown as number);
         noter("Media — variante carte", `${poids} Ko en ${reponse.duration} ms`);
         expect(reponse.headers["content-type"]).to.eq("image/webp");
