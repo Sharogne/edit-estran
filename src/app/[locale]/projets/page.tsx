@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import type { Locale } from "@/i18n/routing";
+import { notFound } from "next/navigation";
+import { routing, type Locale } from "@/i18n/routing";
 import { getPublishedBooks } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
 import { BookCard } from "@/components/site/BookCard";
@@ -28,6 +30,11 @@ export async function generateMetadata({
 
 export default async function ProjectsPage({ params }: PageProps<"/[locale]/projets">) {
   const { locale } = await params;
+  // Le layout valide déjà la locale, mais la page se rend en parallèle : sans
+  // ce garde elle atteint Intl.DateTimeFormat avec une étiquette de langue
+  // invalide (/e, /a-b-c) et lève une RangeError à chaque requête. Le statut
+  // restait 404 pour le visiteur, mais chaque robot inondait les logs.
+  if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
   const t = await getTranslations("projects");
   const books = await getPublishedBooks(locale as Locale);

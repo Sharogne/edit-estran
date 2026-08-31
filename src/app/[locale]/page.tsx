@@ -1,6 +1,8 @@
+import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import type { Locale } from "@/i18n/routing";
+import { routing, type Locale } from "@/i18n/routing";
 import { getLatestPublishedBooks } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +16,11 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const { locale } = await params;
+  // Le layout valide déjà la locale, mais la page se rend en parallèle : sans
+  // ce garde elle atteint Intl.DateTimeFormat avec une étiquette de langue
+  // invalide (/e, /a-b-c) et lève une RangeError à chaque requête. Le statut
+  // restait 404 pour le visiteur, mais chaque robot inondait les logs.
+  if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
   const t = await getTranslations("home");
   const latest = await getLatestPublishedBooks(locale as Locale, 3);

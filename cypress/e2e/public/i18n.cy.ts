@@ -20,6 +20,20 @@ describe("Page introuvable", () => {
     }
   });
 
+  it("refuse une locale malformée sans lever côté serveur", () => {
+    // Le segment [locale] accepte n'importe quoi. La page se rendait avant que
+    // le notFound() du layout ne prenne effet et atteignait
+    // Intl.DateTimeFormat avec une étiquette invalide : RangeError à chaque
+    // requête. Le visiteur voyait bien un 404, mais chaque robot balayant
+    // /wp-admin ou /.env inondait les logs de production.
+    for (const chemin of ["/de", "/projets", "/e", "/a-b-c", "/123456789"]) {
+      cy.request({ url: chemin, failOnStatusCode: false }).its("status").should("eq", 404);
+      cy.visit(chemin, { failOnStatusCode: false });
+      cy.get("[data-cy=not-found-title]").should("have.text", "Page introuvable");
+      cy.get("[data-cy=header-title]").should("be.visible");
+    }
+  });
+
   it("garde la 404 traduite pour un livre inconnu ou non publié", () => {
     for (const chemin of ["/fr/projets/inconnu", "/fr/projets/manuscrit-inacheve"]) {
       cy.visit(chemin, { failOnStatusCode: false });
