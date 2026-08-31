@@ -51,6 +51,7 @@ export async function buildStoredBook(def: BookSeedDef): Promise<StoredBook> {
     coverImage: await processImageBuffer(cover, COVER_FULL),
     backCoverImage: back ? await processImageBuffer(back, BACK_COVER) : null,
     publishedAt: def.publishedAt ? def.publishedAt.toISOString() : null,
+    dejaPublie: def.status === "published",
     sortOrder: def.sortOrder,
     purchaseUrl: def.purchaseUrl ?? null,
     createdAt: now,

@@ -187,6 +187,37 @@ describe("Adresse publique dérivée du titre", () => {
       .its("status")
       .should("eq", 404);
   });
+
+  it("garde l'adresse figée après un retour en brouillon", () => {
+    // Le parcours qui déverrouillait tout : « je dépublie le temps de
+    // corriger, je republie ». Le gel reposait sur publishedAt, que ce détour
+    // remet à null — le titre redevenait modifiable et l'adresse changeait,
+    // cassant en silence les liens déjà partagés.
+    const adresse = slug(PUBLIE);
+    cy.visit("/admin");
+    cy.get(`[data-cy=admin-book-row-${adresse}]`).click();
+
+    cy.get("[data-cy=book-form-status]").select("draft");
+    cy.get("[data-cy=book-form-published-at]").clear();
+    cy.get("[data-cy=book-form-submit]").click();
+    cy.get("[data-cy=book-form-success]").should("be.visible");
+
+    // Dépublié et sans date, mais déjà diffusé une fois : toujours verrouillé.
+    cy.reload();
+    cy.get("[data-cy=book-form-title-fr]").should("have.attr", "readonly");
+
+    // Et la règle tient côté serveur, verrou du champ contourné.
+    cy.get("[data-cy=book-form-title-fr]").invoke("removeAttr", "readonly");
+    cy.get("[data-cy=book-form-title-fr]").clear().type("Cy Renomme Apres Depublication");
+    cy.get("[data-cy=book-form-status]").select("published");
+    cy.get("[data-cy=book-form-submit]").click();
+    cy.get("[data-cy=book-form-success]").should("be.visible");
+
+    cy.storedBook(adresse).should((livre) => {
+      expect(livre!.slug, "l'adresse reste celle qui a été diffusée").to.eq(adresse);
+    });
+    cy.request(`/fr/projets/${adresse}`).its("status").should("eq", 200);
+  });
 });
 
 export {};

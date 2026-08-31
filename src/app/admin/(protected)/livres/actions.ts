@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { z } from "zod";
 import { mutateContent, readContent } from "@/lib/store";
-import type { StoredBook } from "@/lib/content-types";
+import { aDejaEtePublie, type StoredBook } from "@/lib/content-types";
 import { requireAdmin } from "@/lib/session";
 import { slugify, uniqueSlug } from "@/lib/slugify";
 import { routing } from "@/i18n/routing";
@@ -70,14 +70,16 @@ function slugDepuisTitre(
 }
 
 /**
- * Un slug ne suit le titre que TANT QUE le livre n'a jamais été publié.
+ * Un slug ne suit le titre que TANT QUE le livre n'a JAMAIS été publié.
  * Une fois l'adresse publique diffusée (partage, favori, indexation), la
  * régénérer casserait ces liens en silence — et l'éditeur n'a plus de champ où
- * s'en apercevoir. `publishedAt` non nul signe un livre déjà rendu public.
+ * s'en apercevoir.
+ *
+ * Le gel doit donc être monotone. Il l'est via `dejaPublie`, jamais retiré, et
+ * non via `publishedAt` : dépublier en vidant la date remettait ce dernier à
+ * null, déverrouillait le titre, et republier réécrivait l'adresse.
  */
-function slugFige(livre: { publishedAt: string | null }): boolean {
-  return livre.publishedAt !== null;
-}
+const slugFige = aDejaEtePublie;
 
 /** Reads one optional image out of a FormData field. Throws a user-readable message. */
 function imageFile(formData: FormData, field: string): File | undefined {
@@ -188,6 +190,7 @@ export async function createBook(
       slug: nouveauSlug,
       status: data.status,
       publishedAt: effectivePublishedAt(data.status, data.publishedAt),
+      dejaPublie: data.status === "published",
       // Rang posé en fin : l'ordre se règle ensuite au glisser-déposer.
       sortOrder: dernierRang + 1,
       purchaseUrl: data.purchaseUrl,
@@ -234,6 +237,9 @@ export async function updateBook(
     await mutateContent((draft) => {
       const book = draft.books.find((candidate) => candidate.id === bookId);
       if (!book) throw new BookGoneError();
+      // Décision prise sur l'état ANCIEN, avant l'affectation : un brouillon
+      // publié pour la première fois dans cette même sauvegarde doit encore
+      // dériver son adresse du titre.
       nouveauSlug = slugFige(book)
         ? book.slug
         : slugDepuisTitre(data, (candidat) =>
@@ -244,6 +250,8 @@ export async function updateBook(
         slug: nouveauSlug,
         status: data.status,
         publishedAt: effectivePublishedAt(data.status, data.publishedAt),
+        // Jamais retiré : une fois public, toujours figé.
+        dejaPublie: aDejaEtePublie(book) || data.status === "published",
         purchaseUrl: data.purchaseUrl,
         updatedAt: new Date().toISOString(),
         translations: { fr: data.fr, en: data.en },

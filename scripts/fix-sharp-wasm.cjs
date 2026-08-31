@@ -64,6 +64,8 @@ for (const file of fs.readdirSync(wasmLibDir)) {
 if (sharpLoads()) {
   console.log("[fix-sharp-wasm] OK — sharp now runs via WebAssembly on this machine.");
 } else {
-  console.error("[fix-sharp-wasm] FAILED — sharp still cannot load. See skill run-e2e / AGENTS.md.");
+  console.error(
+    "[fix-sharp-wasm] FAILED — sharp still cannot load. See skill run-e2e / AGENTS.md."
+  );
   process.exit(1);
 }

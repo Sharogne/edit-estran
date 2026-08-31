@@ -1,5 +1,5 @@
 import { readContent } from "@/lib/store";
-import type { StoredBook, StoredTranslation } from "@/lib/content-types";
+import { aDejaEtePublie, type StoredBook, type StoredTranslation } from "@/lib/content-types";
 import { routing, type Locale } from "@/i18n/routing";
 
 // All book reads go through this module (never touch the store from pages/components).
@@ -27,6 +27,8 @@ export type AdminBook = {
   slug: string;
   status: "draft" | "published";
   publishedAt: Date | null;
+  /** Adresse publique définitivement figée (le livre a déjà été public). */
+  urlFigee: boolean;
   sortOrder: number;
   coverThumb: string | null;
   backCoverImage: string | null;
@@ -150,6 +152,8 @@ export async function getBookForAdmin(id: string): Promise<AdminBook | null> {
     slug: book.slug,
     status: book.status,
     publishedAt: toDate(book.publishedAt),
+    // Normalisé ici, une fois : les pages n'ont pas à connaître le repli.
+    urlFigee: aDejaEtePublie(book),
     sortOrder: book.sortOrder,
     coverThumb: book.coverThumb,
     backCoverImage: book.backCoverImage,

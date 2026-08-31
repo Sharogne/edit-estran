@@ -26,9 +26,8 @@ export default async function EditBookPage({ params }: PageProps<"/admin/livres/
     coverThumb: book.coverThumb,
     backCoverImage: book.backCoverImage,
     purchaseUrl: book.purchaseUrl ?? "",
-    // Miroir exact de slugFige() côté serveur : une date de parution signe un
-    // livre déjà rendu public, donc une adresse qui a pu circuler.
-    urlFigee: book.publishedAt !== null,
+    // Miroir exact de slugFige() côté serveur.
+    urlFigee: book.urlFigee,
     fr: { title: fr?.title ?? "", synopsis: fr?.synopsis ?? "" },
     en: { title: en?.title ?? "", synopsis: en?.synopsis ?? "" },
   };
