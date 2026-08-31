@@ -26,12 +26,25 @@ describe("Page introuvable", () => {
     // Intl.DateTimeFormat avec une étiquette invalide : RangeError à chaque
     // requête. Le visiteur voyait bien un 404, mais chaque robot balayant
     // /wp-admin ou /.env inondait les logs de production.
-    for (const chemin of ["/de", "/projets", "/e", "/a-b-c", "/123456789"]) {
+    for (const chemin of ["/de", "/e", "/a-b-c", "/123456789"]) {
       cy.request({ url: chemin, failOnStatusCode: false }).its("status").should("eq", 404);
       cy.visit(chemin, { failOnStatusCode: false });
       cy.get("[data-cy=not-found-title]").should("have.text", "Page introuvable");
       cy.get("[data-cy=header-title]").should("be.visible");
     }
+  });
+
+  it("préfixe la langue sur un chemin public sans locale", () => {
+    // Le middleware next-intl doit rediriger /projets vers /fr/projets. Quand
+    // son matcher était neutralisé, ces adresses tombaient en 404 : le test
+    // précédent prenait ce 404 pour la règle, alors que c'était le symptôme.
+    cy.request({ url: "/projets", followRedirect: false }).should((reponse) => {
+      expect(reponse.status).to.eq(307);
+      expect(reponse.redirectedToUrl).to.contain("/fr/projets");
+    });
+    cy.visit("/projets");
+    cy.location("pathname").should("eq", "/fr/projets");
+    cy.get("[data-cy=projects-title]").should("be.visible");
   });
 
   it("garde la 404 traduite pour un livre inconnu ou non publié", () => {
