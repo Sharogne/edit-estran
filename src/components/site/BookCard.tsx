@@ -10,12 +10,16 @@ export function BookCard({ book, locale }: { book: PublicBook; locale: string })
   return (
     <Link href={`/projets/${book.slug}`} data-cy={`book-card-${book.slug}`} className="group block">
       <div className="relative aspect-2/3 overflow-hidden rounded-sm bg-surface shadow-book">
-        {book.coverThumb ? (
+        {book.coverCard ? (
           <Image
-            src={book.coverThumb}
+            src={book.coverCard}
             alt={book.title}
             fill
             sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 280px"
+            // Déjà en WebP, déjà au bon format et à la bonne taille : repasser
+            // par /_next/image ne ferait que recompresser en créant un cache
+            // disque, ce que cette variante cherche justement à éviter.
+            unoptimized
             className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           />
         ) : (

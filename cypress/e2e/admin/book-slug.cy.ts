@@ -34,9 +34,9 @@ function creer(options: {
   if (options.titreFr) cy.get("[data-cy=book-form-title-fr]").type(options.titreFr);
   if (options.titreEn) cy.get("[data-cy=book-form-title-en]").type(options.titreEn);
   cy.get("[data-cy=book-form-synopsis-fr]").type(options.synopsis ?? "Synopsis de contrôle.");
-  if (options.publier) cy.get("[data-cy=book-form-status]").select("published");
+  if (options.publier) cy.publier();
   cy.get("[data-cy=book-form-submit]").click();
-  cy.url({ timeout: 30000 }).should("match", /\/admin\/livres\/[a-z0-9-]+$/);
+  cy.attendCreation();
 }
 
 describe("Adresse publique dérivée du titre", () => {
@@ -115,28 +115,26 @@ describe("Adresse publique dérivée du titre", () => {
     cy.get("[data-cy=book-form-synopsis-fr]").type("Synopsis de contrôle.");
 
     // Refus : on ne doit pas se retrouver en « publié » à son insu.
-    cy.on("window:confirm", () => false);
-    cy.get("[data-cy=book-form-status]").select("published");
-    cy.get("[data-cy=book-form-status]").should("have.value", "draft");
+    cy.get("[data-cy=book-form-status]").click();
+    cy.get("[data-cy=confirm-dialog-publish]").should("be.visible");
+    cy.get("[data-cy=confirm-dialog-publish-cancel]").click();
+
+    cy.get("[data-cy=confirm-dialog-publish]").should("not.be.visible");
+    cy.get("[data-cy=book-form-status]").should("not.be.checked");
   });
 
   it("nomme le livre et la conséquence dans la confirmation", () => {
     const CONFIRMATION = "Cy Message Confirmation";
-    const vus: string[] = [];
-    cy.on("window:confirm", (texte) => {
-      vus.push(texte);
-      return false;
-    });
-
     cy.visit("/admin/livres/nouveau");
     cy.get("[data-cy=book-form-title-fr]").type(CONFIRMATION);
-    cy.get("[data-cy=book-form-status]").select("published");
+    cy.get("[data-cy=book-form-status]").click();
 
-    cy.wrap(null).should(() => {
-      const message = vus.join(" ");
-      expect(message, "le livre est nommé").to.contain(CONFIRMATION);
-      expect(message, "la conséquence est explicite").to.contain("ne sera plus modifiable");
-    });
+    // La question nomme le livre, et dit les DEUX conséquences : la mise en
+    // ligne, et le gel du titre — c'est la seconde qu'on oublierait.
+    cy.get("[data-cy=confirm-dialog-publish]").should("contain", CONFIRMATION);
+    cy.get("[data-cy=confirm-dialog-publish-body]")
+      .should("contain", "ne sera plus modifiable")
+      .and("contain", "définitive");
   });
 
   it("explique le gel à venir tant que le livre est en brouillon", () => {

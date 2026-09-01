@@ -18,7 +18,7 @@ type StoredBookShape = {
   status: string;
   sortOrder: number;
   publishedAt: string | null;
-  coverThumb: string | null;
+  coverCard: string | null;
   coverImage: string | null;
   backCoverImage: string | null;
   purchaseUrl: string | null;
@@ -32,10 +32,29 @@ function decodedBytes(dataUri: string): number {
   return Math.floor((payload.length * 3) / 4) - padding;
 }
 
+/**
+ * Dimensions d'un WebP simple (chunk `VP8 `), lues dans son en-tête.
+ *
+ * De quoi vérifier que le format 2:3 des couvertures est bien appliqué à
+ * l'ENCODAGE sans charger sharp dans la configuration Cypress. Retourne null
+ * sur toute autre variante de WebP (lossless, alpha) plutôt que de deviner :
+ * un test doit échouer bruyamment, pas asserter sur des dimensions inventées.
+ */
+function webpSize(buffer: Buffer): { width: number; height: number } | null {
+  const simple = buffer.length > 30 && buffer.subarray(12, 16).toString("latin1") === "VP8 ";
+  const signature = simple && buffer[23] === 0x9d && buffer[24] === 0x01 && buffer[25] === 0x2a;
+  if (!signature) return null;
+  return {
+    width: buffer.readUInt16LE(26) & 0x3fff,
+    height: buffer.readUInt16LE(28) & 0x3fff,
+  };
+}
+
 /** Light-weight probe of a stored image: the data URI itself is far too big to log. */
 function imageProbe(value: string | null) {
   if (!value) return null;
-  return { prefix: value.slice(0, 23), bytes: decodedBytes(value) };
+  const buffer = Buffer.from(value.slice(value.indexOf(",") + 1), "base64");
+  return { prefix: value.slice(0, 23), bytes: decodedBytes(value), size: webpSize(buffer) };
 }
 
 /** Flattens a messages file to dotted keys, for the FR/EN parity check. */
@@ -80,7 +99,7 @@ export default defineConfig({
             publishedAt: book.publishedAt,
             purchaseUrl: book.purchaseUrl,
             fields: Object.keys(book).sort(),
-            coverThumb: imageProbe(book.coverThumb),
+            coverCard: imageProbe(book.coverCard),
             coverImage: imageProbe(book.coverImage),
             backCoverImage: imageProbe(book.backCoverImage),
             titles: {

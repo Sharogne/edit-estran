@@ -41,3 +41,39 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/*
+ * Dialogues de confirmation (src/components/ui/ConfirmDialog.tsx).
+ *
+ * Le `::backdrop` vit dans le top layer : il ne reçoit pas les styles portés par
+ * un parent, d'où cette règle globale plutôt qu'une classe sur le composant.
+ * L'entrée est brève et discrète — il s'agit d'ancrer le dialogue dans la page,
+ * pas de le faire remarquer.
+ */
+dialog[open] {
+  animation: dialogue-entree 160ms ease-out;
+}
+
+dialog[open]::backdrop {
+  animation: dialogue-fond 160ms ease-out;
+}
+
+@keyframes dialogue-entree {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+@keyframes dialogue-fond {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[open],
+  dialog[open]::backdrop {
+    animation: none;
+  }
+}

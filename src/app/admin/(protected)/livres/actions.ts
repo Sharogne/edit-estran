@@ -15,7 +15,8 @@ import {
   imageFileSchema,
   reorderSchema,
 } from "@/lib/validation/book";
-import { BACK_COVER, COVER_FULL, COVER_THUMB, processImage } from "@/lib/images";
+import type { ImageVariant } from "@/lib/images";
+import { BACK_COVER, COVER_CARD, COVER_FULL, processImage } from "@/lib/images";
 
 export type BookActionState = { error?: string; success?: boolean };
 
@@ -69,13 +70,31 @@ function slugDepuisTitre(
 }
 
 /**
- * Un slug ne suit le titre que TANT QUE le livre n'a jamais été publié.
+ * Un slug ne suit le titre que TANT QUE le livre n'est pas publié.
  * Une fois l'adresse publique diffusée (partage, favori, indexation), la
  * régénérer casserait ces liens en silence — et l'éditeur n'a plus de champ où
- * s'en apercevoir. `publishedAt` non nul signe un livre déjà rendu public.
+ * s'en apercevoir.
+ *
+ * C'est `status` qui fait foi, et non `publishedAt` : la date de parution est un
+ * champ éditorial librement saisi, et s'en servir figeait le titre d'un
+ * brouillon qui n'a jamais été en ligne. La publication étant à sens unique
+ * (cf. statutApresEdition), « publié » vaut bien « a été rendu public ».
  */
-function slugFige(livre: { publishedAt: string | null }): boolean {
-  return livre.publishedAt !== null;
+function slugFige(livre: { status: string }): boolean {
+  return livre.status === "published";
+}
+
+/**
+ * La publication est à SENS UNIQUE : un livre en ligne ne redevient pas un
+ * brouillon, on le retire en le supprimant. Le formulaire ne propose plus la
+ * marche arrière, mais c'est ICI que la règle tient — comme pour le slug figé,
+ * le formulaire n'est qu'une aide à la saisie.
+ */
+function statutApresEdition(
+  livre: { status: string },
+  demande: "draft" | "published"
+): "draft" | "published" {
+  return livre.status === "published" ? "published" : demande;
 }
 
 /** Reads one optional image out of a FormData field. Throws a user-readable message. */
@@ -89,9 +108,34 @@ function imageFile(formData: FormData, field: string): File | undefined {
   return entry;
 }
 
-type BookImages = Pick<StoredBook, "coverThumb" | "coverImage" | "backCoverImage">;
+/**
+ * `processImage`, mais une image que sharp refuse devient un message.
+ *
+ * Le formulaire décode déjà le fichier avant l'envoi, mais ce contrôle vit dans
+ * le navigateur : il ne couvre ni un client qui poste directement, ni les cas
+ * que le navigateur décode et pas sharp. Or une exception qui s'échappe d'une
+ * server action ne produit pas d'erreur de formulaire — elle produit la page
+ * d'erreur générique de Next (« A server error occurred »), écran noir sans
+ * explication ET saisie perdue. Le dernier filet est donc ici.
+ */
+async function encoder(file: File, variant: ImageVariant): Promise<string> {
+  try {
+    return await processImage(file, variant);
+  } catch (cause) {
+    console.error(
+      `[admin] encodage impossible : ${file.name} (${file.type}, ${file.size} o)`,
+      cause
+    );
+    throw new ImageValidationError(
+      `${file.name || "Image"} — fichier illisible : il est abîmé, ou son contenu ne ` +
+        "correspond pas à son extension. Ouvrez-le puis ré-enregistrez-le en JPEG ou PNG."
+    );
+  }
+}
 
-const NO_IMAGES: BookImages = { coverThumb: null, coverImage: null, backCoverImage: null };
+type BookImages = Pick<StoredBook, "coverCard" | "coverImage" | "backCoverImage">;
+
+const NO_IMAGES: BookImages = { coverCard: null, coverImage: null, backCoverImage: null };
 
 /**
  * Encodes whichever images were uploaded; fields left empty keep their current
@@ -104,18 +148,18 @@ async function applyImages(
   backCover: File | undefined
 ): Promise<BookImages> {
   const next: BookImages = {
-    coverThumb: current.coverThumb,
+    coverCard: current.coverCard,
     coverImage: current.coverImage,
     backCoverImage: current.backCoverImage,
   };
   if (cover) {
-    // Two variants from the same upload: the thumb keeps list pages light, the
-    // full one is what the book page displays.
-    next.coverThumb = await processImage(cover, COVER_THUMB);
-    next.coverImage = await processImage(cover, COVER_FULL);
+    // Deux variantes du même envoi : la carte pour les listes, la grande pour la
+    // fiche du livre. Les deux sont recadrées au format 2:3 par l'encodeur.
+    next.coverCard = await encoder(cover, COVER_CARD);
+    next.coverImage = await encoder(cover, COVER_FULL);
   }
   if (backCover) {
-    next.backCoverImage = await processImage(backCover, BACK_COVER);
+    next.backCoverImage = await encoder(backCover, BACK_COVER);
   }
   return next;
 }
@@ -138,17 +182,18 @@ export async function createBook(
   if (!parsed.success) return { error: formatZodError(parsed.error) };
   const data = parsed.data;
 
-  let cover: File | undefined;
-  let backCover: File | undefined;
+  let images: BookImages;
   try {
-    cover = imageFile(formData, "cover");
-    backCover = imageFile(formData, "backCover");
+    images = await applyImages(
+      NO_IMAGES,
+      imageFile(formData, "cover"),
+      imageFile(formData, "backCover")
+    );
   } catch (error) {
     if (error instanceof ImageValidationError) return { error: error.message };
     throw error;
   }
 
-  const images = await applyImages(NO_IMAGES, cover, backCover);
   const bookId = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -174,6 +219,7 @@ export async function createBook(
   });
 
   revalidatePublic(slug);
+  revalidatePath("/admin");
   redirect(`/admin/livres/${bookId}`);
 }
 
@@ -192,17 +238,17 @@ export async function updateBook(
   if (!parsed.success) return { error: formatZodError(parsed.error) };
   const data = parsed.data;
 
-  let cover: File | undefined;
-  let backCover: File | undefined;
+  let images: BookImages;
   try {
-    cover = imageFile(formData, "cover");
-    backCover = imageFile(formData, "backCover");
+    images = await applyImages(
+      existing,
+      imageFile(formData, "cover"),
+      imageFile(formData, "backCover")
+    );
   } catch (error) {
     if (error instanceof ImageValidationError) return { error: error.message };
     throw error;
   }
-
-  const images = await applyImages(existing, cover, backCover);
 
   let nouveauSlug = existing.slug;
   try {
@@ -214,11 +260,12 @@ export async function updateBook(
         : slugDepuisTitre(data, (candidat) =>
             draft.books.some((autre) => autre.id !== bookId && autre.slug === candidat)
           );
+      const statut = statutApresEdition(book, data.status);
       Object.assign(book, {
         ...images,
         slug: nouveauSlug,
-        status: data.status,
-        publishedAt: effectivePublishedAt(data.status, data.publishedAt),
+        status: statut,
+        publishedAt: effectivePublishedAt(statut, data.publishedAt),
         purchaseUrl: data.purchaseUrl,
         updatedAt: new Date().toISOString(),
         translations: { fr: data.fr, en: data.en },
@@ -232,6 +279,7 @@ export async function updateBook(
   // Old slug too: its public page must drop out if the slug changed.
   revalidatePublic(existing.slug, nouveauSlug);
   revalidatePath(`/admin/livres/${bookId}`);
+  revalidatePath("/admin");
   return { success: true };
 }
 
@@ -247,6 +295,7 @@ export async function deleteBook(formData: FormData): Promise<void> {
   });
 
   if (removedSlug) revalidatePublic(removedSlug);
+  revalidatePath("/admin");
   redirect("/admin");
 }
 

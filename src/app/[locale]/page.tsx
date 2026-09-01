@@ -1,10 +1,12 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import type { Locale } from "@/i18n/routing";
+import { routing, type Locale } from "@/i18n/routing";
 import { getLatestPublishedBooks } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { BookCard } from "@/components/site/BookCard";
+import { hasLocale } from "next-intl";
+import { notFound } from "next/navigation";
 
 // Rendered per request rather than frozen at build time: the content lives in an
 // in-memory JSON store, so a render costs a lookup and no I/O — while a
@@ -14,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const { locale } = await params;
+  if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
   const t = await getTranslations("home");
   const latest = await getLatestPublishedBooks(locale as Locale, 3);

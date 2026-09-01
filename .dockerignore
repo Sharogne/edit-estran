@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+.git
+.env
+.env.local
+data
+cypress/screenshots
+cypress/videos
+cypress/downloads
+*.log

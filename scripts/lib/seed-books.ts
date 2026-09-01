@@ -1,4 +1,4 @@
-import { BACK_COVER, COVER_FULL, COVER_THUMB, processImageBuffer } from "../../src/lib/images";
+import { BACK_COVER, COVER_CARD, COVER_FULL, processImageBuffer } from "../../src/lib/images";
 import type { StoredBook } from "../../src/lib/content-types";
 import {
   backCoverArtwork,
@@ -47,7 +47,7 @@ export async function buildStoredBook(def: BookSeedDef): Promise<StoredBook> {
     id: `seed-${def.slug}`,
     slug: def.slug,
     status: def.status,
-    coverThumb: await processImageBuffer(cover, COVER_THUMB),
+    coverCard: await processImageBuffer(cover, COVER_CARD),
     coverImage: await processImageBuffer(cover, COVER_FULL),
     backCoverImage: back ? await processImageBuffer(back, BACK_COVER) : null,
     publishedAt: def.publishedAt ? def.publishedAt.toISOString() : null,

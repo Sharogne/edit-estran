@@ -2,17 +2,34 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import type { Locale } from "@/i18n/routing";
+import { routing, type Locale } from "@/i18n/routing";
 import { getPublishedBookBySlug } from "@/lib/books";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { BookCoverFlip } from "@/components/site/BookCoverFlip";
+import { hasLocale } from "next-intl";
 
 // Rendered per request rather than frozen at build time: the content lives in an
 // in-memory JSON store, so a render costs a lookup and no I/O — while a
 // build-time prerender would resurface the catalogue as it was at build after
 // any restart not preceded by a rebuild (crash, reboot, plain pm2 restart).
 export const dynamic = "force-dynamic";
+
+/**
+ * Extrait pour les métadonnées, coupé sur un mot.
+ *
+ * Une coupe brute au caractère produit des résumés de moteur de recherche qui
+ * s'arrêtent en plein milieu d'un mot — c'est le premier aperçu que le lecteur
+ * a du livre, autant qu'il se termine proprement.
+ */
+function extrait(texte: string, max: number): string {
+  if (texte.length <= max) return texte;
+  const coupe = texte.slice(0, max);
+  const dernierEspace = coupe.lastIndexOf(" ");
+  // Un texte sans espace dans la fenêtre (langue non segmentée, URL) : on garde
+  // la coupe brute plutôt que de renvoyer une chaîne vide.
+  return `${(dernierEspace > 0 ? coupe.slice(0, dernierEspace) : coupe).trimEnd()}…`;
+}
 
 export async function generateMetadata({
   params,
@@ -22,14 +39,14 @@ export async function generateMetadata({
   if (!book) return {};
   return {
     title: book.title,
-    description: book.synopsis.slice(0, 160),
+    description: extrait(book.synopsis, 160),
     alternates: {
       canonical: `/${locale}/projets/${slug}`,
       languages: { fr: `/fr/projets/${slug}`, en: `/en/projets/${slug}` },
     },
     openGraph: {
       title: book.title,
-      description: book.synopsis.slice(0, 200),
+      description: extrait(book.synopsis, 200),
       type: "book",
       // Covers are stored inline as data URIs, which crawlers cannot read — the
       // /og route decodes one back to a real image response. Plain path: it is
@@ -41,6 +58,7 @@ export async function generateMetadata({
 
 export default async function ProjectPage({ params }: PageProps<"/[locale]/projets/[slug]">) {
   const { locale, slug } = await params;
+  if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
   const t = await getTranslations("project");
   const book = await getPublishedBookBySlug(slug, locale as Locale);

@@ -15,6 +15,7 @@ généreux, sobriété, le livre est la vedette).
 | Tokens (couleurs, rayons, ombres, fontes) | `src/app/globals.css`, bloc `@theme` |
 | Fontes (next/font) | `src/styles/fonts.ts` → variables `--font-display`, `--font-sans` |
 | Primitives réutilisables | `src/components/ui/` |
+| Confirmations (publier, supprimer) | `src/components/ui/ConfirmDialog.tsx` |
 | Composants du site public | `src/components/site/` |
 | Composants du back office | `src/components/admin/` |
 | Identité textuelle (nom, baseline) | `src/config/site.ts` + `messages/{fr,en}.json` |
@@ -43,6 +44,16 @@ L'admin utilise les mêmes tokens (pas de second thème à maintenir).
 4. Contraste AA : 4.5:1 texte courant, 3:1 grands titres. Focus visible stylé partout.
 5. Tester visuellement : mobile ~375px ET desktop ≥1280px, FR ET EN, états vides
    (livre sans cover, liste vide).
+6. **Jamais de `window.confirm`, `alert` ni `prompt`.** Ces boîtes sont dessinées par le
+   navigateur : hors charte, immettables en forme, et elles donnent à une décision
+   éditoriale l'allure d'une alerte système. Toute confirmation passe par
+   `src/components/ui/ConfirmDialog.tsx`.
+6. **Les couvertures sont au format 2:3**, garanti à l'ENCODAGE (`COVER_RATIO`, `src/config/uploads.ts`)
+   et pas par le CSS. Un conteneur `aspect-2/3` + `object-cover` ne rogne donc plus rien : il
+   affiche une image déjà à ce format. Changer ce ratio n'est pas une retouche CSS — il faut le
+   changer dans la config, ré-encoder l'existant (`scripts/migrate-media.ts`) et ajuster les
+   conteneurs. Les images arrivent par des URLs `/media`, jamais en data URI : un composant qui
+   recevrait une data URI ferait tomber le test de charge.
 
 ## Méthode d'itération (avec Claude)
 

@@ -1,16 +1,21 @@
 import { readContent } from "@/lib/store";
 import type { StoredBook, StoredTranslation } from "@/lib/content-types";
 import { routing, type Locale } from "@/i18n/routing";
+import { mediaUrl, mediaVersion, type MediaVariant } from "@/lib/media";
 
 // All book reads go through this module (never touch the store from pages/components).
 // The store keeps dates as ISO strings; they are turned back into Date objects here
 // so callers keep working with real dates.
+//
+// Les champs image ne sortent JAMAIS d'ici sous forme de data URI : ce que les
+// pages et composants reçoivent est une URL /media. C'est ce qui garde le HTML
+// léger et rend les couvertures cachables — voir src/lib/media.ts.
 
 export type PublicBook = {
   id: string;
   slug: string;
-  /** Small variant — these types are only ever rendered in list layouts. */
-  coverThumb: string | null;
+  /** URL /media de la variante carte — ces types ne sont rendus qu'en liste. */
+  coverCard: string | null;
   publishedAt: Date | null;
   title: string;
   synopsis: string;
@@ -28,7 +33,7 @@ export type AdminBook = {
   status: "draft" | "published";
   publishedAt: Date | null;
   sortOrder: number;
-  coverThumb: string | null;
+  coverCard: string | null;
   backCoverImage: string | null;
   purchaseUrl: string | null;
   translations: Record<Locale, StoredTranslation>;
@@ -60,6 +65,19 @@ function resolveField(
   return undefined;
 }
 
+/**
+ * URL publique d'une image stockée, ou null si le livre n'en a pas.
+ *
+ * La version vient de `updatedAt` : une modification du livre change l'URL, ce
+ * qui permet à /media de répondre en cache immuable sans jamais servir une
+ * couverture périmée. Le prix est une re-livraison après une édition qui n'a
+ * pas touché aux images — négligeable devant un cache qui, autrement, devrait
+ * rester court.
+ */
+function urlImage(book: StoredBook, variant: MediaVariant, stocke: string | null) {
+  return stocke ? mediaUrl(book.id, variant, mediaVersion(book.updatedAt)) : null;
+}
+
 function toDate(iso: string | null): Date | null {
   return iso ? new Date(iso) : null;
 }
@@ -81,7 +99,7 @@ function toPublicBook(book: StoredBook, locale: Locale): PublicBook {
   return {
     id: book.id,
     slug: book.slug,
-    coverThumb: book.coverThumb,
+    coverCard: urlImage(book, "card", book.coverCard),
     publishedAt: toDate(book.publishedAt),
     title: resolveField(book, locale, "title") ?? book.slug,
     synopsis: resolveField(book, locale, "synopsis") ?? "",
@@ -112,8 +130,8 @@ export async function getPublishedBookBySlug(
   if (!book) return null;
   return {
     ...toPublicBook(book, locale),
-    coverImage: book.coverImage,
-    backCoverImage: book.backCoverImage,
+    coverImage: urlImage(book, "cover", book.coverImage),
+    backCoverImage: urlImage(book, "back", book.backCoverImage),
     purchaseUrl: book.purchaseUrl ?? null,
   };
 }
@@ -136,7 +154,7 @@ export async function getAllBooksForAdmin() {
       status: book.status,
       publishedAt: toDate(book.publishedAt),
       updatedAt: new Date(book.updatedAt),
-      coverThumb: book.coverThumb,
+      coverCard: urlImage(book, "card", book.coverCard),
       title: resolveField(book, routing.defaultLocale, "title") ?? book.slug,
     }));
 }
@@ -151,8 +169,8 @@ export async function getBookForAdmin(id: string): Promise<AdminBook | null> {
     status: book.status,
     publishedAt: toDate(book.publishedAt),
     sortOrder: book.sortOrder,
-    coverThumb: book.coverThumb,
-    backCoverImage: book.backCoverImage,
+    coverCard: urlImage(book, "card", book.coverCard),
+    backCoverImage: urlImage(book, "back", book.backCoverImage),
     purchaseUrl: book.purchaseUrl ?? null,
     translations: book.translations,
   };

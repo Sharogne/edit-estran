@@ -11,7 +11,7 @@ export type AdminBookRow = {
   slug: string;
   status: string;
   updatedAt: Date;
-  coverThumb: string | null;
+  coverCard: string | null;
   title: string;
 };
 
@@ -133,8 +133,15 @@ export function BookList({ books }: { books: AdminBookRow[] }) {
               className="flex flex-1 items-center gap-5 py-4 transition-colors hover:bg-surface"
             >
               <div className="relative h-16 w-11 shrink-0 overflow-hidden rounded-sm bg-surface shadow-book">
-                {book.coverThumb && (
-                  <Image src={book.coverThumb} alt="" fill sizes="44px" className="object-cover" />
+                {book.coverCard && (
+                  <Image
+                    src={book.coverCard}
+                    alt=""
+                    fill
+                    sizes="44px"
+                    unoptimized
+                    className="object-cover"
+                  />
                 )}
               </div>
               <div className="min-w-0 flex-1">

@@ -17,7 +17,7 @@ office réservé à un éditeur unique (admin). Hébergement : **VPS OVH** (Node
 | Données | Un fichier JSON (`content.json`) | **Aucune base de données.** Backup = copie d'un fichier |
 | i18n | next-intl v4 | Segment `[locale]`, messages dans `messages/{fr,en}.json` |
 | Auth | iron-session + bcryptjs | Cookie chiffré, un seul compte admin (`ADMIN_EMAIL` + `ADMIN_PASSWORD_HASH_B64` dans `.env`) |
-| Images | sharp | Recompressées en WebP puis **inlinées en data URI** dans le JSON — aucun dossier d'uploads |
+| Images | sharp | Recadrées au **format 2:3**, recompressées en WebP, stockées en data URI dans le JSON — aucun dossier d'uploads. **Servies par la route `/media`**, jamais inline dans le HTML |
 | Validation | Zod v4 | Schémas partagés dans `src/lib/validation/` |
 | Tests e2e | Cypress | Sélecteurs `data-cy` uniquement, fichier de contenu de test dédié (`.env.test`) |
 
@@ -27,20 +27,24 @@ office réservé à un éditeur unique (admin). Hébergement : **VPS OVH** (Node
 messages/{fr,en}.json          Chaînes UI du site public (TOUT texte public passe par là)
 data/content.json              TOUTES les données du site (textes + images) — hors dépôt
 scripts/seed-content.ts        Écrit content.json (dev : catalogue démo ; --e2e : jeu déterministe)
+scripts/migrate-media.ts       Ré-encode les images d'un content.json existant (format 2:3, /media)
 scripts/hash-password.mjs      Génère la ligne ADMIN_PASSWORD_HASH_B64 à coller dans .env
 src/
   config/site.ts               Identité du site (nom, baseline, contact) — branding centralisé
+  config/uploads.ts            Limites d'import des images + COVER_RATIO — formulaire / Zod / next.config
+  config/content-limits.ts     Longueurs maximales des champs texte — partagées formulaire / Zod
   i18n/                        routing.ts (locales), request.ts, navigation.ts (Link locale-aware)
-  proxy.ts                     Middleware next-intl — matcher EXCLUT /admin /api /og
+  proxy.ts                     Middleware next-intl — matcher EXCLUT /admin /api /media /og
   lib/
     content-types.ts           Forme de content.json (StoredBook, ContentFile)
     store.ts                   SEUL module autorisé à toucher content.json (cache + écriture atomique)
     books.ts                   Toutes les requêtes livres (public + admin)
     images.ts                  SEUL module autorisé à encoder/décoder les images (sharp → data URI)
+    media.ts                   Adressage des images : variantes, version d'URL, analyse du nom de fichier
     session.ts                 iron-session : getSession(), requireAdmin()
     validation/book.ts         Schémas Zod des formulaires livre
   components/
-    ui/                        Primitives du design system (Button, Card, …)
+    ui/                        Primitives du design system (Button, Container, ConfirmDialog…)
     site/                      Composants du site public (Header, Footer, BookCard, BookCoverFlip…)
     admin/                     Composants du back office (BookForm, StatusBadge, …)
   app/
@@ -55,7 +59,8 @@ src/
         livres/actions.ts      TOUTES les server actions livres (CRUD + images)
         livres/nouveau/        Création
         livres/[id]/           Édition, suppression
-    og/[slug]/route.ts         Décode la couverture pour les crawlers (partages sociaux)
+    media/[id]/[fichier]/      Sert les images décodées (URL versionnée, cache immuable)
+    og/[slug]/route.ts         Décode la couverture pour les crawlers — URL STABLE, cf. Données
     sitemap.ts, robots.ts      SEO
 ```
 
@@ -68,6 +73,8 @@ npm run lint         # ESLint
 npm run format       # Prettier --write
 
 npm run seed         # (Ré)écrit data/content.json avec le catalogue de démonstration
+npx tsx scripts/migrate-media.ts           # Rapport de migration des images (rien n'est écrit)
+npx tsx scripts/migrate-media.ts --write   # …et l'applique
 node scripts/hash-password.mjs "<mot-de-passe>"   # Ligne ADMIN_PASSWORD_HASH_B64 pour .env
 
 npm run e2e          # Suite Cypress complète headless (seed + build + run)  [skill: run-e2e]
@@ -95,15 +102,35 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
 - Le store garde le fichier en mémoire → **un seul process** (`instances: 1` côté PM2). Un mode
   cluster ferait diverger les caches.
 - Le fichier vit HORS du répertoire de build (`CONTENT_FILE`), pour survivre aux déploiements.
+- **La publication est à SENS UNIQUE** : un livre va de brouillon à publié, jamais l'inverse ;
+  pour le retirer du site, on le supprime. Le formulaire ne propose donc pas de marche arrière
+  (case à cocher tant que le livre est en brouillon, état en lecture seule ensuite), et
+  `updateBook` force le statut d'un livre déjà publié (`statutApresEdition`). Motif : une liste
+  déroulante laissait croire au retour en brouillon, et React ne resynchronise pas le
+  `defaultValue` d'un `<select>` après le `form.reset()` qu'il déclenche à chaque server action —
+  la combo réaffichait « Publié » alors que le store disait `draft`, et l'envoi suivant
+  republiait le livre sans que personne l'ait demandé.
 - **L'adresse publique d'un livre (`slug`) n'est pas saisie** : elle est dérivée du titre FR, à
   défaut du titre EN, et suffixée (`-2`, `-3`) en cas de doublon. Elle suit le titre tant que le
-  livre n'a jamais été publié (`publishedAt === null`), puis elle est **figée** : une URL déjà
-  diffusée ne doit pas casser parce qu'on corrige une coquille. Côté formulaire, le titre qui a
-  produit l'adresse passe en `readOnly` (jamais `disabled` : un champ désactivé n'est pas envoyé
-  et effacerait le titre), et basculer un livre en « Publié » demande confirmation. Ces deux
-  garde-fous sont de l'aide à la saisie — **la règle est appliquée côté serveur** (`slugFige`).
+  livre est en brouillon (`status !== "published"`), puis elle est **figée** : une URL déjà
+  diffusée ne doit pas casser parce qu'on corrige une coquille. C'est bien le STATUT qui fait foi,
+  pas `publishedAt` : cette date est un champ éditorial librement saisi, et s'en servir figeait le
+  titre d'un brouillon jamais mis en ligne. Côté formulaire, le titre qui a produit l'adresse
+  passe en `readOnly` (jamais `disabled` : un champ désactivé n'est pas envoyé et effacerait le
+  titre), et publier demande confirmation. Ces deux garde-fous sont de l'aide à la saisie —
+  **la règle est appliquée côté serveur** (`slugFige`).
 - **L'ordre du catalogue (`sortOrder`) n'est pas saisi non plus** : il se règle au glisser-déposer
   dans le tableau de bord (action `reorderBooks`). Un livre créé prend le dernier rang.
+- **Les images sont stockées dans le JSON mais servies par `/media`**, jamais inline dans le HTML.
+  Une data URI dans une page y pèse deux fois (balise `<img>` et charge utile RSC), interdit le
+  cache navigateur et désactive le chargement différé (`next/image` force `unoptimized` et
+  `isLazy = false` sur toute source `data:`) — ce qui plafonnait la résolution des vignettes. Les
+  projections de `books.ts` ne rendent donc QUE des URLs ; le test de charge
+  (`cypress/perf/catalogue.cy.ts`) échoue si une data URI réapparaît dans une page.
+  L'URL porte une version dérivée de `updatedAt`, ce qui autorise un cache immuable. `/og/[slug]`
+  reste à part et garde une adresse STABLE par slug : les plateformes sociales mettent l'image de
+  partage en cache, une URL versionnée les ferait re-télécharger à chaque édition et rendrait
+  caduc un lien déjà partagé.
 - Les pages publiques qui lisent le contenu sont en `export const dynamic = "force-dynamic"`.
   Le rendu ne coûte qu'une lecture mémoire (~10 ms), alors qu'un pré-rendu figé au build
   reservirait le catalogue tel qu'il était au build après tout redémarrage non précédé d'un
@@ -123,6 +150,10 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
   `src/app/globals.css`. Un composant ne contient jamais de couleur hex/oklch en dur.
 - Primitives réutilisables dans `src/components/ui/` — les pages composent, elles ne stylent pas
   à la main ce qui existe déjà.
+- **Les couvertures sont au format 2:3**, garanti à l'encodage (`COVER_RATIO`, `src/config/uploads.ts`)
+  et non par le CSS. `object-cover` sur un conteneur `aspect-2/3` rognait en silence toute image
+  d'un autre format ; le recadrage est désormais décidé par sharp, et le formulaire annonce à
+  l'éditeur la part qui sera perdue avant l'envoi.
 - Toute itération design passe par l'agent `design-implementer` et le skill `design-system`.
 
 ### Tests
@@ -143,9 +174,25 @@ npm run e2e:open     # Cypress interactif contre le serveur de dev
   expandent `$nom`. `@next/env` ré-expand même ce que `dotenv-cli` a déjà résolu, ce qui
   tronque un hash brut en silence et fait échouer le login sans message. Toujours coller la
   sortie de `scripts/hash-password.mjs`, jamais un hash à la main.
-- Images : type MIME et taille validés par Zod (10 Mo max) ; encodage via `src/lib/images.ts`
-  uniquement. Aucun chemin fourni par l'utilisateur n'atteint le filesystem — le seul fichier
-  écrit est `content.json`.
+- Images : type MIME et taille validés par Zod ; encodage via `src/lib/images.ts` uniquement.
+  Aucun chemin fourni par l'utilisateur n'atteint le filesystem — le seul fichier écrit est
+  `content.json`.
+- **`/media` ne filtre pas sur le statut** : le back office doit afficher les couvertures des
+  brouillons, et un filtre par cookie rendrait la réponse incachable. L'`id` du livre est un UUID
+  non devinable et l'URL d'un brouillon n'est jamais publiée : c'est la non-découvrabilité qui
+  protège, pas un contrôle d'accès. À revoir si un jour les brouillons doivent être secrets.
+- **Longueurs de texte : `src/config/content-limits.ts`, nulle part ailleurs.** Le formulaire en
+  dérive son `maxLength` et son compteur, les schémas Zod leur `.max()`. Un plafond recopié à deux
+  endroits finit par diverger, et c'est l'éditeur qui l'apprend — en se faisant refuser une saisie
+  que le champ avait acceptée.
+- **Limites d'import : `src/config/uploads.ts`, nulle part ailleurs.** Le formulaire les applique
+  AVANT l'envoi (type, poids, décodage réel du fichier, nombre de pixels) et `next.config.ts` en
+  dérive `serverActions.bodySizeLimit`. Motif : les deux échecs qui comptent — dépassement du
+  plafond de transport et exception sharp sur un fichier illisible — échappent au formulaire et
+  produisent la page d'erreur générique de Next (« A server error occurred »), écran noir qui perd
+  la saisie. Toute image encodée passe donc par `encoder()` (livres/actions.ts), qui renvoie un
+  message plutôt que de laisser filer l'exception. Côté serveur d'entrée, Nginx doit rester
+  au-dessus du plafond de Next (skill `deploy-ovh`), sinon c'est lui qui renvoie un 413.
 - `robots.txt` exclut `/admin`.
 
 ## Agents & skills du projet

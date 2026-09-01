@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/config/uploads";
+import {
+  MAX_PURCHASE_URL_CHARS,
+  MAX_SYNOPSIS_CHARS,
+  MAX_TITLE_CHARS,
+} from "@/config/content-limits";
 
 // Single source of truth for book form constraints (used by all server actions).
 
@@ -6,8 +12,14 @@ import { z } from "zod";
 // (voir resolveField dans src/lib/books.ts). L'exigence porte donc sur
 // l'ENSEMBLE des locales, pas sur chacune — d'où le superRefine plus bas.
 const localeContentSchema = z.object({
-  title: z.string().trim().max(200, "Titre trop long"),
-  synopsis: z.string().trim().max(5000, "Synopsis trop long (5000 caractères max)"),
+  title: z
+    .string()
+    .trim()
+    .max(MAX_TITLE_CHARS, `Titre trop long (${MAX_TITLE_CHARS} caractères max)`),
+  synopsis: z
+    .string()
+    .trim()
+    .max(MAX_SYNOPSIS_CHARS, `Synopsis trop long (${MAX_SYNOPSIS_CHARS} caractères max)`),
 });
 
 const bookFormBaseSchema = z.object({
@@ -23,7 +35,7 @@ const bookFormBaseSchema = z.object({
   purchaseUrl: z
     .string()
     .trim()
-    .max(500, "Lien trop long")
+    .max(MAX_PURCHASE_URL_CHARS, `Lien trop long (${MAX_PURCHASE_URL_CHARS} caractères max)`)
     .refine((valeur) => {
       if (valeur === "") return true;
       try {
@@ -60,13 +72,17 @@ export type BookFormValues = z.infer<typeof bookFormSchema>;
 
 // --- Image uploads ---
 
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
-export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+// Les limites elles-mêmes vivent dans src/config/uploads.ts : elles sont
+// partagées avec le formulaire (contrôle avant envoi) et avec next.config.ts
+// (plafond de transport). Ici on ne fait que les exprimer en schéma.
 
 export const imageFileSchema = z
   .custom<File>((value) => value instanceof File, "Fichier invalide")
   .refine((file) => file.size > 0, "Fichier vide")
-  .refine((file) => file.size <= MAX_IMAGE_BYTES, "Image trop lourde (10 Mo max)")
+  .refine(
+    (file) => file.size <= MAX_IMAGE_BYTES,
+    `Image trop lourde (${MAX_IMAGE_BYTES / (1024 * 1024)} Mo max)`
+  )
   .refine(
     (file) => ALLOWED_IMAGE_TYPES.includes(file.type),
     "Format non supporté (JPEG, PNG, WebP ou AVIF)"

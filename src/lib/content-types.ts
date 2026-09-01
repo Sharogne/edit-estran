@@ -16,11 +16,14 @@ export type StoredBook = {
   id: string;
   slug: string;
   status: "draft" | "published";
-  /** 320px WebP data URI — list pages and back office (many per page, kept tiny). */
-  coverThumb: string | null;
-  /** 900px WebP data URI — front cover on the book page. */
+  /**
+   * WebP 600 × 900 en data URI — cartes des listes et vignettes du back office.
+   * Servi par /media, jamais inline dans le HTML (cf. src/lib/media.ts).
+   */
+  coverCard: string | null;
+  /** WebP 900 × 1350 en data URI — couverture de la fiche livre. */
   coverImage: string | null;
-  /** 900px WebP data URI — back cover ("4e de couverture"), shown by flipping the card. */
+  /** WebP 900 × 1350 en data URI — 4e de couverture, au dos de la carte. */
   backCoverImage: string | null;
   /** Lien marchand externe. null tant que l'éditeur n'en a pas renseigné. */
   purchaseUrl: string | null;

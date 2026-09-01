@@ -60,7 +60,10 @@ sauvegarde. (`npm run seed` écrirait le catalogue de démonstration — à ne l
 ```nginx
 server {
     server_name <domaine>;
-    client_max_body_size 20m;                      # uploads d'images (10 Mo par fichier)
+    client_max_body_size 24m;                      # > bodySizeLimit de Next (22 Mo, dérivé
+                                                   # de src/config/uploads.ts). En dessous,
+                                                   # Nginx renvoie un 413 et l'admin voit un
+                                                   # écran d'erreur au lieu d'un message.
 
     location /_next/static/ {
         alias /srv/edit/app/.next/static/;
@@ -77,9 +80,20 @@ server {
 }
 ```
 
-Il n'y a plus de `location /uploads/` : les images sont servies **dans le HTML** (data URI). Seul
-`/og/<slug>` renvoie une vraie réponse image, pour les crawlers — elle passe par Node, sans
-configuration particulière.
+Il n'y a plus de `location /uploads/` : aucune image ne vit sur le disque. Elles sont stockées
+dans `content.json` et servies **par Node**, sur deux routes qui passent par le `location /`
+ci-dessus sans configuration propre :
+
+- `/media/<id>/<variante>-<version>.webp` — toutes les couvertures du site. La réponse porte
+  `Cache-Control: public, max-age=31536000, immutable`, ce qui n'est sûr QUE parce que l'URL
+  contient une version dérivée de `updatedAt`. **Ne jamais ajouter d'`add_header Cache-Control`
+  sur cette route** : Nginx remplacerait celui de Node, et une directive plus courte ferait
+  retélécharger toutes les couvertures à chaque visite — plus longue, elle figerait une
+  couverture remplacée chez les visiteurs.
+- `/og/<slug>` — l'image de partage social, pour les crawlers. Son adresse est stable par slug
+  (les plateformes la mettent en cache), donc son `max-age` reste court, à dessein.
+
+Si un jour Nginx sert un cache devant Node, `/media` est le bon candidat et `/og` ne l'est pas.
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/edit /etc/nginx/sites-enabled/

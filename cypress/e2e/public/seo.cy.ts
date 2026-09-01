@@ -1,6 +1,11 @@
 // Les couvertures sont stockées en data URI, illisibles pour un crawler : la
 // route /og/<slug> les redécode. Ce fichier vérifie cette chaîne de bout en
 // bout, ainsi que les deux surfaces qui exposent le catalogue aux robots.
+//
+// La suite tourne avec SITE_ENV=production (.env.test) : c'est le comportement
+// dont une régression coûte cher. Le cas staging — robots.txt fermé — est
+// vérifié par scripts/deploy-staging.sh, qui refuse de laisser en ligne un site
+// de test indexable.
 
 describe("SEO & partages sociaux", () => {
   it("interdit le back office aux robots", () => {
@@ -9,6 +14,25 @@ describe("SEO & partages sociaux", () => {
       expect(reponse.body).to.contain("Disallow: /admin");
       expect(reponse.body).to.contain("/sitemap.xml");
     });
+  });
+
+  it("n'interdit pas tout le site en production", () => {
+    cy.request("/robots.txt").then((reponse) => {
+      // Piège : "Disallow: /admin" CONTIENT "Disallow: /". Une simple recherche
+      // de sous-chaîne laisserait donc passer le garde-fou de staging jusqu'en
+      // production sans qu'aucun test ne bronche — d'où la comparaison ligne à
+      // ligne.
+      const lignes = String(reponse.body)
+        .split(String.fromCharCode(10))
+        .map((ligne) => ligne.trim());
+      expect(lignes, "aucune interdiction globale en production").to.not.include("Disallow: /");
+    });
+  });
+
+  it("n'affiche pas le bandeau d'environnement de test en production", () => {
+    cy.login();
+    cy.visit("/admin");
+    cy.get("[data-cy=admin-env-banner]").should("not.exist");
   });
 
   it("ne liste que les livres publiés dans le sitemap", () => {
@@ -45,3 +69,5 @@ describe("SEO & partages sociaux", () => {
     }
   });
 });
+
+export {};

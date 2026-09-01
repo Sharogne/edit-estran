@@ -40,6 +40,26 @@ describe("Règles de validation (admin)", () => {
     cy.storedBook("cy-fichier-invalide").should("be.null");
   });
 
+  it("refuse une image abîmée ou déguisée par son extension, sans l'envoyer", () => {
+    cy.visit("/admin/livres/nouveau");
+    remplirFormulaire("Cy Image Abimee");
+
+    // Type MIME parfaitement valide, contenu qui n'en est pas un : sous Windows
+    // `file.type` vient de l'extension, pas des octets. Sans décodage avant
+    // envoi, sharp lève côté serveur et l'éditeur reçoit la page d'erreur de
+    // Next — écran noir, saisie perdue.
+    cy.get("[data-cy=book-form-cover]").selectFile({
+      contents: Cypress.Buffer.from("ÿØÿ pas vraiment un JPEG"),
+      fileName: "couverture.jpg",
+      mimeType: "image/jpeg",
+    });
+
+    cy.get("[data-cy=book-form-error-cover]").should("be.visible").and("contain", "illisible");
+    cy.get("[data-cy=book-form-cover]").should("have.value", "");
+    cy.get("[data-cy=book-form-submit]").should("be.enabled");
+    cy.storedBook("cy-image-abimee").should("be.null");
+  });
+
   it("refuse un livre sans titre ni synopsis dans aucune langue", () => {
     cy.visit("/admin/livres/nouveau");
     cy.get("[data-cy=book-form-submit]").click();
@@ -83,6 +103,61 @@ describe("Règles de validation (admin)", () => {
       .and("contain", "10 Mo");
     // le champ est vidé : le fichier refusé ne peut pas partir malgré tout
     cy.get("[data-cy=book-form-cover]").should("have.value", "");
+  });
+
+  it("annonce le rognage d'une image hors format, sans la refuser", () => {
+    cy.visit("/admin/livres/nouveau");
+    remplirFormulaire("Cy Image Paysage");
+
+    // 1200 × 800 : franchement paysage, donc une bonne moitié de la largeur
+    // partira au recadrage 2:3. Ce n'est pas une faute — une couverture n'est
+    // pas toujours calibrée — mais l'éditeur doit l'apprendre AVANT l'envoi,
+    // pas en découvrant le résultat sur le site.
+    cy.get("[data-cy=book-form-cover]").selectFile("cypress/fixtures/cover-paysage.jpg");
+
+    cy.get("[data-cy=book-form-warning-cover]")
+      .should("be.visible")
+      .and("contain", "1200 × 800")
+      .and("contain", "rogné");
+    // Un avertissement, pas un refus : le fichier reste en place et part.
+    cy.get("[data-cy=book-form-cover]").should("not.have.value", "");
+    cy.get("[data-cy=book-form-error-cover]").should("not.exist");
+    cy.get("[data-cy=book-form-submit]").should("be.enabled");
+  });
+
+  it("ne dit rien quand l'image est déjà au bon format", () => {
+    cy.visit("/admin/livres/nouveau");
+    remplirFormulaire("Cy Image Calibree");
+    // 800 × 1200, soit exactement 2:3 : rien à signaler, et surtout pas de
+    // bruit qui banaliserait l'avertissement.
+    cy.get("[data-cy=book-form-cover]").selectFile("cypress/fixtures/cover-upload.jpg");
+    cy.get("[data-cy=book-form-error-cover]").should("not.exist");
+    cy.get("[data-cy=book-form-warning-cover]").should("not.exist");
+  });
+
+  it("compte les caractères du synopsis au fil de la saisie", () => {
+    cy.visit("/admin/livres/nouveau");
+    cy.get("[data-cy=book-form-synopsis-fr]").clear().type("Douze caract");
+    cy.get("[data-cy=book-form-synopsis-fr-compteur]").should("contain", "12 / 1500");
+  });
+
+  it("refuse un synopsis au-delà du plafond, même maxLength contourné", () => {
+    cy.visit("/admin/livres/nouveau");
+    remplirFormulaire("Cy Synopsis Trop Long");
+
+    // `maxLength` empêche d'en SAISIR davantage : c'est une aide, pas la règle.
+    // On le retire pour vérifier que le refus tient là où il compte vraiment.
+    cy.get("[data-cy=book-form-synopsis-fr]")
+      .invoke("removeAttr", "maxlength")
+      .invoke("val", "x".repeat(1501))
+      .trigger("input");
+
+    // Le compteur dit ce qui cloche avant même l'envoi.
+    cy.get("[data-cy=book-form-synopsis-fr-compteur]").should("contain", "de trop");
+
+    cy.get("[data-cy=book-form-submit]").click();
+    cy.get("[data-cy=book-form-error]").should("contain", "Synopsis (FR)").and("contain", "1500");
+    cy.storedBook("cy-synopsis-trop-long").should("be.null");
   });
 });
 

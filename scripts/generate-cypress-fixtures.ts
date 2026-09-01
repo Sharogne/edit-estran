@@ -21,6 +21,9 @@ async function main() {
   await fs.mkdir(outDir, { recursive: true });
   await jpeg("cover-upload.jpg", 800, 1200, [31, 58, 45]);
   await jpeg("back-cover-upload.jpg", 800, 1200, [226, 176, 74]);
+  // Franchement paysage : de quoi vérifier que l'encodeur recadre au format 2:3
+  // des couvertures, et que le formulaire prévient de ce qui sera rogné.
+  await jpeg("cover-paysage.jpg", 1200, 800, [58, 45, 31]);
 }
 
 main();

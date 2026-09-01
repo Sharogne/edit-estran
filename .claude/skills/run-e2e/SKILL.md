@@ -63,6 +63,26 @@ derrière lui. Deux parades, à conserver :
 - les specs publiques qui comptent des cartes excluent les slugs `cy-`
   (`.not("[data-cy^=book-card-cy-]")`), pour qu'un résidu admin ne les fasse pas tomber en cascade.
 
+### Toujours attendre une création avec `cy.attendCreation()`
+
+Après un envoi du formulaire de création, **ne jamais attendre l'URL avec un motif large**. Le
+motif qui semblait naturel — `/\/admin\/livres\/[a-z0-9-]+$/` — est aussi satisfait par
+`/admin/livres/nouveau`, la page d'où l'on vient : l'assertion passait **sans rien attendre**, et
+le `cy.storedBook()` qui suivait lisait un `content.json` que la server action n'avait pas fini
+d'écrire (sharp encode plusieurs variantes avant de répondre).
+
+Le symptôme est perfide : la course se joue au hasard de la machine, les retries de Cypress la
+masquent (`Attempt 1 of 2` puis un vert), et l'essai raté laisse un livre derrière lui. Comme le
+slug nu existe alors déjà, le retry en crée un **suffixé `-2`** que le `after` ne nettoie pas —
+et ce résidu fait tomber en cascade toutes les specs suivantes qui comptent les livres.
+
+`cy.attendCreation()` exige l'UUID du livre créé. Si tu vois plusieurs specs sans lien échouer
+sur un décompte (`expected Array(4) to have length 3`), cherche un slug `-2` dans le fichier de
+contenu de test : c'est cette signature-là.
+
+Corollaire pour toute nouvelle assertion d'attente : vérifie qu'elle est FAUSSE avant l'action.
+Une assertion déjà vraie n'attend rien.
+
 ## Test de charge
 
 ```bash
@@ -73,11 +93,19 @@ Le spec vit dans `cypress/perf/`, **hors de `cypress/e2e/`** : il n'est donc jam
 `npm run e2e`, qui doit rester rapide. `npm run cy:perf` le relance seul contre un serveur déjà
 démarré (utile pour itérer sans re-seeder).
 
-Deux règles à respecter si tu y touches :
+Ce que le test protège, depuis que les images passent par `/media` : **aucune data URI dans le
+HTML**. C'était le poids dominant des pages (~1,6 Mo pour la liste à 50 livres, contre ~99 Ko
+aujourd'hui), et une régression d'une ligne — repasser une image stockée à un composant au lieu
+de son URL — le ramènerait d'un coup sans qu'aucun test fonctionnel ne bronche.
+
+Trois règles à respecter si tu y touches :
 
 - **Images à entropie photographique obligatoire.** `perfBooks()` passe `photoSeed`, ce qui
   bascule `buildStoredBook` sur `photoArtwork()` au lieu du SVG plat. Mesurer avec l'artwork
   géométrique donnerait ~15 fois moins lourd : des chiffres rassurants et faux.
+- **Mesurer un livre de CHARGE, pas le premier venu.** Les deux livres du seed déterministe
+  ouvrent le catalogue et portent l'artwork géométrique : les variantes se repèrent donc par
+  l'id (`/seed-perf-livre-`), sinon le budget des images perd ses dents.
 - **Budgets calibrés, pas devinés.** Chaque entrée de `BUDGET` porte en commentaire la valeur
   nominale mesurée. Après un changement qui déplace un chiffre, relancer, constater, et mettre à
   jour la valeur nominale — pas seulement le seuil.
@@ -138,5 +166,9 @@ Sélecteurs `data-cy` uniquement ; pas de `cy.wait(ms)` ; auth via `cy.login()` 
 données du seed = lecture seule pour les specs publiques ; les specs admin qui créent des
 livres utilisent des slugs préfixés `cy-` pour ne pas collisionner avec le seed.
 
-Les images étant des data URI, ne jamais comparer un `src` entier dans une assertion : comparer
-un extrait (`String(src).slice(0, 200)`), sinon la sortie d'échec est illisible.
+Les `src` d'images sont des URLs `/media/<id>/<variante>-<version>.webp` : assertables
+directement, mais **jamais en dur** — la version change à chaque modification du livre. On
+assert donc la FORME (expression régulière) ou on relit le `src` du DOM avant de s'en servir,
+comme dans `cypress/e2e/public/media.cy.ts`. En revanche, une data URI lue dans le store se
+compare toujours par extrait (`String(uri).slice(0, 200)`) : la comparer entière rendrait la
+sortie d'échec illisible.
